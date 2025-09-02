@@ -7,7 +7,7 @@ spring:
     show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         dialect: org.hibernate.dialect.H2Dialect
 
 server:
@@ -39,6 +39,13 @@ logging:
 gitlab:
   base-url: https://gitlab.com
   mock-mode: false  # Set to true for development/testing without real GitLab
+  timeout: 60
+  max-retries: 3
+
+# SquashTM configuration
+squashtm:
+  base-url: https://demo.squashtest.org/squash
+  api-token: eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIyIiwidXVpZCI6ImVmMWY1ZDFjLTkxYmEtNDYyYS1hMjJkLWQ4MDIzZmNmYTFmMCIsInBlcm1pc3Npb25zIjoiUkVBRF9XUklURSIsImlhdCI6MTc1NjY1ODE1NywiZXhwIjoxNzg4MDQ4MDAwfQ.L85847WTiChrbchYWCQhaXeIwYssSLeDZ1TtyvjEuXHeeN8msN1BGJuBYxEN3ju6lHC6FS8N7sA0GUTBWTq0RA
   timeout: 60
   max-retries: 3
 

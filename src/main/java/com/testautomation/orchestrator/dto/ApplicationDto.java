@@ -17,6 +17,10 @@ public class ApplicationDto {
     @NotBlank(message = "Personal access token cannot be blank")
     private String personalAccessToken;
 
+    @NotNull(message = "Application is required")
+    @NotBlank(message = "Application cannot be blank")
+    private String applicationName;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -67,5 +71,13 @@ public class ApplicationDto {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getApplicationName() {
+        return applicationName;
+    }
+
+    public void setApplicationName(String applicationName) {
+        this.applicationName = applicationName;
     }
 }

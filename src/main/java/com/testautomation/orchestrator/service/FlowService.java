@@ -116,6 +116,48 @@ public class FlowService {
         logger.info("Flow deleted successfully with ID: {}", id);
     }
 
+    public FlowDto addTestCaseToFlow(Long flowId, Long squashTestCaseId) {
+        logger.info("Adding SquashTM test case {} to flow {}", squashTestCaseId, flowId);
+        
+        Flow existingFlow = flowRepository.findById(flowId)
+                .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
+        
+        existingFlow.setSquashTestCaseId(squashTestCaseId);
+        Flow updatedFlow = flowRepository.save(existingFlow);
+        
+        logger.info("Successfully associated SquashTM test case {} with flow {}", squashTestCaseId, flowId);
+        return convertToDto(updatedFlow);
+    }
+
+    public FlowDto removeTestCaseFromFlow(Long flowId) {
+        logger.info("Removing SquashTM test case association from flow {}", flowId);
+        
+        Flow existingFlow = flowRepository.findById(flowId)
+                .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
+        
+        Long previousTestCaseId = existingFlow.getSquashTestCaseId();
+        existingFlow.setSquashTestCaseId(null);
+        Flow updatedFlow = flowRepository.save(existingFlow);
+        
+        logger.info("Successfully removed SquashTM test case {} association from flow {}", previousTestCaseId, flowId);
+        return convertToDto(updatedFlow);
+    }
+
+    public FlowDto updateTestCaseInFlow(Long flowId, Long newSquashTestCaseId) {
+        logger.info("Updating SquashTM test case in flow {} to test case {}", flowId, newSquashTestCaseId);
+        
+        Flow existingFlow = flowRepository.findById(flowId)
+                .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
+        
+        Long previousTestCaseId = existingFlow.getSquashTestCaseId();
+        existingFlow.setSquashTestCaseId(newSquashTestCaseId);
+        Flow updatedFlow = flowRepository.save(existingFlow);
+        
+        logger.info("Successfully updated SquashTM test case in flow {} from {} to {}", 
+                   flowId, previousTestCaseId, newSquashTestCaseId);
+        return convertToDto(updatedFlow);
+    }
+
     private Flow convertToEntity(FlowDto dto) {
         Flow flow = new Flow();
         flow.setFlowStepIds(dto.getFlowStepIds());

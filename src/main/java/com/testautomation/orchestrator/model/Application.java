@@ -24,6 +24,10 @@ public class Application {
     @Column(name = "personal_access_token", nullable = false)
     private String personalAccessToken;
 
+    @NotBlank
+    @Column(name = "application_name", nullable = false)
+    private String applicationName;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -79,5 +83,13 @@ public class Application {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getApplicationName() {
+        return applicationName;
+    }
+
+    public void setApplicationName(String applicationName) {
+        this.applicationName = applicationName;
     }
 }

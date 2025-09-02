@@ -90,6 +90,7 @@ public class ApplicationService {
         Application application = new Application();
         application.setGitlabProjectId(dto.getGitlabProjectId());
         application.setPersonalAccessToken(dto.getPersonalAccessToken());
+        application.setApplicationName(dto.getApplicationName());
         return application;
     }
 
@@ -98,6 +99,7 @@ public class ApplicationService {
         dto.setId(entity.getId());
         dto.setGitlabProjectId(entity.getGitlabProjectId());
         dto.setPersonalAccessToken(entity.getPersonalAccessToken());
+        dto.setApplicationName(entity.getApplicationName());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

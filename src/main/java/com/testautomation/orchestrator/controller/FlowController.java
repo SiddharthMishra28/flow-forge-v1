@@ -1,6 +1,7 @@
 package com.testautomation.orchestrator.controller;
 
 import com.testautomation.orchestrator.dto.FlowDto;
+import com.testautomation.orchestrator.dto.FlowTestCaseAssociationDto;
 import com.testautomation.orchestrator.service.FlowService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -118,6 +119,70 @@ public class FlowController {
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             logger.error("Failed to delete flow: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PostMapping("/{flowId}/add-test-case")
+    @Operation(summary = "Associate SquashTM test case with flow", description = "Add or update SquashTM test case association to an existing flow")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Test case associated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data"),
+            @ApiResponse(responseCode = "404", description = "Flow not found")
+    })
+    public ResponseEntity<FlowDto> addTestCaseToFlow(
+            @Parameter(description = "Flow ID") @PathVariable Long flowId,
+            @Valid @RequestBody FlowTestCaseAssociationDto associationDto) {
+        
+        logger.info("Adding SquashTM test case {} to flow {}", associationDto.getSquashTestCaseId(), flowId);
+        
+        try {
+            FlowDto updatedFlow = flowService.addTestCaseToFlow(flowId, associationDto.getSquashTestCaseId());
+            return ResponseEntity.ok(updatedFlow);
+        } catch (IllegalArgumentException e) {
+            logger.error("Failed to add test case to flow: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/{flowId}/remove-test-case")
+    @Operation(summary = "Remove SquashTM test case from flow", description = "Remove SquashTM test case association from an existing flow")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Test case association removed successfully"),
+            @ApiResponse(responseCode = "404", description = "Flow not found")
+    })
+    public ResponseEntity<FlowDto> removeTestCaseFromFlow(
+            @Parameter(description = "Flow ID") @PathVariable Long flowId) {
+        
+        logger.info("Removing SquashTM test case association from flow {}", flowId);
+        
+        try {
+            FlowDto updatedFlow = flowService.removeTestCaseFromFlow(flowId);
+            return ResponseEntity.ok(updatedFlow);
+        } catch (IllegalArgumentException e) {
+            logger.error("Failed to remove test case from flow: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PutMapping("/{flowId}/update-test-case")
+    @Operation(summary = "Update SquashTM test case in flow", description = "Update SquashTM test case association in an existing flow")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Test case updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data"),
+            @ApiResponse(responseCode = "404", description = "Flow not found")
+    })
+    public ResponseEntity<FlowDto> updateTestCaseInFlow(
+            @Parameter(description = "Flow ID") @PathVariable Long flowId,
+            @Valid @RequestBody FlowTestCaseAssociationDto associationDto) {
+        
+        logger.info("Updating SquashTM test case in flow {} to test case {}", flowId, associationDto.getSquashTestCaseId());
+        
+        try {
+            FlowDto updatedFlow = flowService.updateTestCaseInFlow(flowId, associationDto.getSquashTestCaseId());
+            return ResponseEntity.ok(updatedFlow);
+        } catch (IllegalArgumentException e) {
+            logger.error("Failed to update test case in flow: {}", e.getMessage());
             return ResponseEntity.notFound().build();
         }
     }
