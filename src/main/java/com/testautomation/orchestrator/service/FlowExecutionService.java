@@ -37,6 +37,9 @@ public class FlowExecutionService {
     private FlowStepRepository flowStepRepository;
 
     @Autowired
+    private TestDataService testDataService;
+
+    @Autowired
     private ApplicationRepository applicationRepository;
 
     @Autowired
@@ -55,7 +58,7 @@ public class FlowExecutionService {
                 .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
         
         // Create flow execution record
-        FlowExecution flowExecution = new FlowExecution(flowId, flow.getGlobalVariables());
+        FlowExecution flowExecution = new FlowExecution(flowId, new HashMap<>());
         flowExecution = flowExecutionRepository.save(flowExecution);
         
         logger.info("Created flow execution with ID: {}", flowExecution.getId());
@@ -85,20 +88,14 @@ public class FlowExecutionService {
                 Application application = applicationRepository.findById(step.getApplicationId())
                         .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + step.getApplicationId()));
                 
-                // Prepare variables for this pipeline: Global + FlowStep Initial + Accumulated Runtime
+                // Prepare variables for this pipeline: FlowStep TestData + Accumulated Runtime
                 Map<String, String> pipelineVariables = new HashMap<>();
                 
-                // 1. Start with global variables
-                if (flow.getGlobalVariables() != null) {
-                    pipelineVariables.putAll(flow.getGlobalVariables());
-                }
+                // 1. Start with merged test data from TestData table
+                Map<String, String> stepTestData = testDataService.mergeTestDataByIds(step.getTestDataIds());
+                pipelineVariables.putAll(stepTestData);
                 
-                // 2. Add flow step initial variables (can override global)
-                if (step.getInitialTestData() != null) {
-                    pipelineVariables.putAll(step.getInitialTestData());
-                }
-                
-                // 3. Add accumulated runtime variables from previous steps (can override all)
+                // 2. Add accumulated runtime variables from previous steps (can override test data)
                 pipelineVariables.putAll(accumulatedRuntimeVariables);
                 
                 logger.debug("Pipeline variables for step {}: {}", stepId, pipelineVariables);
@@ -143,6 +140,230 @@ public class FlowExecutionService {
         return CompletableFuture.completedFuture(convertToDto(flowExecution));
     }
 
+    public FlowExecutionDto createReplayFlowExecution(UUID originalFlowExecutionId, Long failedFlowStepId) {
+        logger.info("Creating replay flow execution for original execution: {} from failed step: {}", originalFlowExecutionId, failedFlowStepId);
+        
+        FlowExecution originalExecution = flowExecutionRepository.findById(originalFlowExecutionId)
+                .orElseThrow(() -> new IllegalArgumentException("Original flow execution not found with ID: " + originalFlowExecutionId));
+        
+        if (originalExecution.getStatus() != ExecutionStatus.FAILED) {
+            throw new IllegalArgumentException("Can only replay failed flow executions");
+        }
+        
+        Flow flow = flowRepository.findById(originalExecution.getFlowId())
+                .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + originalExecution.getFlowId()));
+        
+        // Validate that the failed step exists in the flow
+        if (!flow.getFlowStepIds().contains(failedFlowStepId)) {
+            throw new IllegalArgumentException("Failed flow step ID " + failedFlowStepId + " is not part of flow " + flow.getId());
+        }
+        
+        // Get all successful pipeline executions up to the failed step to extract runtime variables
+        Map<String, String> accumulatedRuntimeVariables = extractRuntimeVariablesUpToStep(originalFlowExecutionId, failedFlowStepId, flow);
+        
+        // Create new flow execution record for replay
+        FlowExecution replayExecution = new FlowExecution(originalExecution.getFlowId(), accumulatedRuntimeVariables);
+        replayExecution = flowExecutionRepository.save(replayExecution);
+        
+        logger.info("Created replay flow execution with ID: {} for original execution: {}", replayExecution.getId(), originalFlowExecutionId);
+        return convertToDto(replayExecution);
+    }
+
+    @Async("flowExecutionTaskExecutor")
+    public CompletableFuture<FlowExecutionDto> executeReplayFlowAsync(UUID replayFlowExecutionId, UUID originalFlowExecutionId, Long failedFlowStepId) {
+        logger.info("Starting async replay execution of flow execution ID: {} from step: {}", replayFlowExecutionId, failedFlowStepId);
+        
+        FlowExecution replayExecution = flowExecutionRepository.findById(replayFlowExecutionId)
+                .orElseThrow(() -> new IllegalArgumentException("Replay flow execution not found with ID: " + replayFlowExecutionId));
+        
+        final Long flowId = replayExecution.getFlowId();
+        Flow flow = flowRepository.findById(flowId)
+                .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
+        
+        try {
+            // Start execution from the failed step onwards
+            Map<String, String> accumulatedRuntimeVariables = new HashMap<>(replayExecution.getRuntimeVariables());
+            int failedStepIndex = flow.getFlowStepIds().indexOf(failedFlowStepId);
+            
+            for (int i = failedStepIndex; i < flow.getFlowStepIds().size(); i++) {
+                Long stepId = flow.getFlowStepIds().get(i);
+                FlowStep step = flowStepRepository.findById(stepId)
+                        .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
+                
+                Application application = applicationRepository.findById(step.getApplicationId())
+                        .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + step.getApplicationId()));
+                
+                // Prepare variables for this pipeline: FlowStep TestData + Accumulated Runtime
+                Map<String, String> pipelineVariables = new HashMap<>();
+                
+                // 1. Start with merged test data from TestData table
+                Map<String, String> stepTestData = testDataService.mergeTestDataByIds(step.getTestDataIds());
+                pipelineVariables.putAll(stepTestData);
+                
+                // 2. Add accumulated runtime variables from previous steps (can override test data)
+                pipelineVariables.putAll(accumulatedRuntimeVariables);
+                
+                logger.debug("Replay pipeline variables for step {}: {}", stepId, pipelineVariables);
+                
+                // Execute pipeline step with replay flag
+                PipelineExecution pipelineExecution = executeReplayPipelineStep(replayExecution, step, application, pipelineVariables, originalFlowExecutionId);
+                
+                if (pipelineExecution.getStatus() == ExecutionStatus.FAILED) {
+                    // Mark replay flow as failed and stop execution
+                    replayExecution.setStatus(ExecutionStatus.FAILED);
+                    replayExecution.setEndTime(LocalDateTime.now());
+                    replayExecution.setRuntimeVariables(accumulatedRuntimeVariables);
+                    flowExecutionRepository.save(replayExecution);
+                    
+                    logger.error("Replay flow execution failed at step: {}", stepId);
+                    return CompletableFuture.completedFuture(convertToDto(replayExecution));
+                }
+                
+                // Accumulate runtime variables from this step for next steps
+                if (pipelineExecution.getRuntimeTestData() != null) {
+                    accumulatedRuntimeVariables.putAll(pipelineExecution.getRuntimeTestData());
+                    logger.debug("Accumulated runtime variables after replay step {}: {}", stepId, accumulatedRuntimeVariables);
+                }
+            }
+            
+            // Mark replay flow as successful
+            replayExecution.setStatus(ExecutionStatus.PASSED);
+            replayExecution.setEndTime(LocalDateTime.now());
+            replayExecution.setRuntimeVariables(accumulatedRuntimeVariables);
+            replayExecution = flowExecutionRepository.save(replayExecution);
+            
+            logger.info("Replay flow execution completed successfully: {}", replayExecution.getId());
+            
+        } catch (Exception e) {
+            logger.error("Replay flow execution failed with exception: {}", e.getMessage(), e);
+            
+            replayExecution.setStatus(ExecutionStatus.FAILED);
+            replayExecution.setEndTime(LocalDateTime.now());
+            replayExecution = flowExecutionRepository.save(replayExecution);
+        }
+        
+        return CompletableFuture.completedFuture(convertToDto(replayExecution));
+    }
+
+    private Map<String, String> extractRuntimeVariablesUpToStep(UUID originalFlowExecutionId, Long failedFlowStepId, Flow flow) {
+        Map<String, String> accumulatedVariables = new HashMap<>();
+        
+        // Get the index of the failed step
+        int failedStepIndex = flow.getFlowStepIds().indexOf(failedFlowStepId);
+        
+        // Get all successful pipeline executions from the original flow execution up to (but not including) the failed step
+        List<PipelineExecution> successfulPipelines = pipelineExecutionRepository.findByFlowExecutionIdOrderByCreatedAt(originalFlowExecutionId)
+                .stream()
+                .filter(pe -> pe.getStatus() == ExecutionStatus.PASSED)
+                .filter(pe -> {
+                    int stepIndex = flow.getFlowStepIds().indexOf(pe.getFlowStepId());
+                    return stepIndex < failedStepIndex;
+                })
+                .collect(Collectors.toList());
+        
+        // Accumulate runtime variables from successful steps in order
+        for (PipelineExecution pipeline : successfulPipelines) {
+            if (pipeline.getRuntimeTestData() != null) {
+                accumulatedVariables.putAll(pipeline.getRuntimeTestData());
+            }
+        }
+        
+        logger.info("Extracted {} runtime variables from {} successful steps before failed step {}", 
+                   accumulatedVariables.size(), successfulPipelines.size(), failedFlowStepId);
+        
+        return accumulatedVariables;
+    }
+
+    private PipelineExecution executeReplayPipelineStep(FlowExecution flowExecution, FlowStep step, 
+                                                       Application application, Map<String, String> pipelineVariables, 
+                                                       UUID originalFlowExecutionId) {
+        logger.info("Executing REPLAY pipeline step: {} for flow execution: {}", step.getId(), flowExecution.getId());
+        
+        // Use the already merged pipeline variables (Global + FlowStep + Runtime)
+        Map<String, String> mergedVariables = new HashMap<>(pipelineVariables);
+        
+        // Create pipeline execution record with replay flag
+        PipelineExecution pipelineExecution = new PipelineExecution(
+                flowExecution.getFlowId(),
+                flowExecution.getId(),
+                step.getId(),
+                testDataService.mergeTestDataByIds(step.getTestDataIds()),
+                pipelineVariables
+        );
+        pipelineExecution.setIsReplay(true);
+        pipelineExecution.setOriginalFlowExecutionId(originalFlowExecutionId);
+        pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+        
+        try {
+            logger.debug("Triggering REPLAY pipeline with variables: {}", mergedVariables);
+            
+            if (gitLabConfig.isMockMode()) {
+                // Mock mode for testing
+                logger.info("MOCK MODE: Simulating REPLAY GitLab pipeline execution for project {} on branch {}", 
+                           application.getGitlabProjectId(), step.getBranch());
+                
+                // Simulate pipeline response
+                long mockPipelineId = System.currentTimeMillis();
+                String mockPipelineUrl = String.format("https://gitlab.com/%s/-/pipelines/%d", 
+                                                      application.getGitlabProjectId(), mockPipelineId);
+                
+                pipelineExecution.setPipelineId(mockPipelineId);
+                pipelineExecution.setPipelineUrl(mockPipelineUrl);
+                pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+                
+                logger.info("MOCK: REPLAY Pipeline triggered successfully: {} for step {}", mockPipelineId, step.getId());
+                
+                // Simulate successful completion after a short delay
+                simulateMockPipelineCompletion(pipelineExecution);
+                
+            } else {
+                // Real GitLab API call
+                GitLabApiClient.GitLabPipelineResponse response = null;
+                try {
+                    response = gitLabApiClient
+                            .triggerPipeline(gitLabConfig.getBaseUrl(), application.getGitlabProjectId(), 
+                                           step.getBranch(), application.getPersonalAccessToken(), mergedVariables)
+                            .doOnError(error -> {
+                                logger.error("GitLab API call failed for REPLAY project {} on branch {}: {}", 
+                                           application.getGitlabProjectId(), step.getBranch(), error.getMessage());
+                                if (error.getMessage().contains("400")) {
+                                    logger.error("This is likely due to invalid GitLab project ID, branch name, or access token");
+                                    logger.error("Please verify: 1) Project ID exists 2) Branch exists 3) Access token has API permissions");
+                                }
+                            })
+                            .block();
+                } catch (Exception apiError) {
+                    logger.error("GitLab API call failed for REPLAY: {}", apiError.getMessage());
+                    response = null;
+                }
+                
+                if (response != null) {
+                    pipelineExecution.setPipelineId(response.getId());
+                    pipelineExecution.setPipelineUrl(response.getWebUrl());
+                    pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+                    
+                    logger.info("REPLAY Pipeline triggered successfully: {} for step {}", response.getId(), step.getId());
+                    
+                    // Poll for completion
+                    pollPipelineCompletion(pipelineExecution, application, gitLabConfig.getBaseUrl(), step);
+                } else {
+                    logger.error("Failed to trigger REPLAY pipeline - null response from GitLab API");
+                    pipelineExecution.setStatus(ExecutionStatus.FAILED);
+                    pipelineExecution.setEndTime(LocalDateTime.now());
+                    pipelineExecutionRepository.save(pipelineExecution);
+                }
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to execute REPLAY pipeline step: {}", e.getMessage(), e);
+            pipelineExecution.setStatus(ExecutionStatus.FAILED);
+            pipelineExecution.setEndTime(LocalDateTime.now());
+            pipelineExecutionRepository.save(pipelineExecution);
+        }
+        
+        return pipelineExecution;
+    }
+
     private PipelineExecution executePipelineStep(FlowExecution flowExecution, FlowStep step, 
                                                  Application application, Map<String, String> pipelineVariables) {
         logger.info("Executing pipeline step: {} for flow execution: {}", step.getId(), flowExecution.getId());
@@ -155,7 +376,7 @@ public class FlowExecutionService {
                 flowExecution.getFlowId(),
                 flowExecution.getId(),
                 step.getId(),
-                step.getInitialTestData(),
+                testDataService.mergeTestDataByIds(step.getTestDataIds()),
                 pipelineVariables
         );
         pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
@@ -372,7 +593,6 @@ public class FlowExecutionService {
         dto.setFlowId(entity.getFlowId());
         dto.setStartTime(entity.getStartTime());
         dto.setEndTime(entity.getEndTime());
-        dto.setGlobalVariables(entity.getGlobalVariables());
         dto.setRuntimeVariables(entity.getRuntimeVariables());
         dto.setStatus(entity.getStatus());
         dto.setCreatedAt(entity.getCreatedAt());
@@ -396,8 +616,8 @@ public class FlowExecutionService {
             dto.setApplications(applications.stream().map(this::convertApplicationToDto).collect(Collectors.toList()));
         });
         
-        // Load pipeline executions
-        List<PipelineExecution> pipelineExecutions = pipelineExecutionRepository.findByFlowExecutionIdOrderByCreatedAt(entity.getId());
+        // Load pipeline executions (including replays)
+        List<PipelineExecution> pipelineExecutions = pipelineExecutionRepository.findByFlowExecutionIdIncludingReplays(entity.getId());
         dto.setPipelineExecutions(pipelineExecutions.stream().map(this::convertPipelineExecutionToDto).collect(Collectors.toList()));
         
         return dto;
@@ -408,7 +628,6 @@ public class FlowExecutionService {
         dto.setId(entity.getId());
         dto.setFlowStepIds(entity.getFlowStepIds());
         dto.setSquashTestCaseId(entity.getSquashTestCaseId());
-        dto.setGlobalVariables(entity.getGlobalVariables());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
@@ -422,7 +641,7 @@ public class FlowExecutionService {
         dto.setTestTag(entity.getTestTag());
         dto.setTestStage(entity.getTestStage());
         dto.setSquashStepIds(entity.getSquashStepIds());
-        dto.setInitialTestData(entity.getInitialTestData());
+        dto.setTestDataIds(entity.getTestDataIds());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
@@ -448,10 +667,12 @@ public class FlowExecutionService {
         dto.setPipelineUrl(entity.getPipelineUrl());
         dto.setStartTime(entity.getStartTime());
         dto.setEndTime(entity.getEndTime());
-        dto.setInitialTestData(entity.getInitialTestData());
+        dto.setConfiguredTestData(entity.getConfiguredTestData());
         dto.setRuntimeTestData(entity.getRuntimeTestData());
         dto.setStatus(entity.getStatus());
         dto.setCreatedAt(entity.getCreatedAt());
+        dto.setIsReplay(entity.getIsReplay());
+        dto.setOriginalFlowExecutionId(entity.getOriginalFlowExecutionId());
         return dto;
     }
 }

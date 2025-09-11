@@ -13,7 +13,6 @@ public class FlowExecutionDto {
     private Long flowId;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
-    private Map<String, String> globalVariables;
     private Map<String, String> runtimeVariables;
     private ExecutionStatus status;
     private LocalDateTime createdAt;
@@ -66,13 +65,6 @@ public class FlowExecutionDto {
         this.endTime = endTime;
     }
 
-    public Map<String, String> getGlobalVariables() {
-        return globalVariables;
-    }
-
-    public void setGlobalVariables(Map<String, String> globalVariables) {
-        this.globalVariables = globalVariables;
-    }
 
     public Map<String, String> getRuntimeVariables() {
         return runtimeVariables;

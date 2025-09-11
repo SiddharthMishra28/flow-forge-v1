@@ -27,9 +27,6 @@ public class Flow {
     @Column(name = "squash_test_case_id", nullable = false)
     private Long squashTestCaseId;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "global_variables", columnDefinition = "json")
-    private Map<String, String> globalVariables;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -42,10 +39,9 @@ public class Flow {
     // Constructors
     public Flow() {}
 
-    public Flow(List<Long> flowStepIds, Long squashTestCaseId, Map<String, String> globalVariables) {
+    public Flow(List<Long> flowStepIds, Long squashTestCaseId) {
         this.flowStepIds = flowStepIds;
         this.squashTestCaseId = squashTestCaseId;
-        this.globalVariables = globalVariables;
     }
 
     // Getters and Setters
@@ -73,13 +69,6 @@ public class Flow {
         this.squashTestCaseId = squashTestCaseId;
     }
 
-    public Map<String, String> getGlobalVariables() {
-        return globalVariables;
-    }
-
-    public void setGlobalVariables(Map<String, String> globalVariables) {
-        this.globalVariables = globalVariables;
-    }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

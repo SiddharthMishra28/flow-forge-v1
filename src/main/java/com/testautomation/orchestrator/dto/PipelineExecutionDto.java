@@ -16,10 +16,12 @@ public class PipelineExecutionDto {
     private String pipelineUrl;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
-    private Map<String, String> initialTestData;
+    private Map<String, String> configuredTestData;
     private Map<String, String> runtimeTestData;
     private ExecutionStatus status;
     private LocalDateTime createdAt;
+    private Boolean isReplay;
+    private UUID originalFlowExecutionId;
 
     // Constructors
     public PipelineExecutionDto() {}
@@ -96,12 +98,12 @@ public class PipelineExecutionDto {
         this.endTime = endTime;
     }
 
-    public Map<String, String> getInitialTestData() {
-        return initialTestData;
+    public Map<String, String> getConfiguredTestData() {
+        return configuredTestData;
     }
 
-    public void setInitialTestData(Map<String, String> initialTestData) {
-        this.initialTestData = initialTestData;
+    public void setConfiguredTestData(Map<String, String> configuredTestData) {
+        this.configuredTestData = configuredTestData;
     }
 
     public Map<String, String> getRuntimeTestData() {
@@ -126,5 +128,21 @@ public class PipelineExecutionDto {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Boolean getIsReplay() {
+        return isReplay;
+    }
+
+    public void setIsReplay(Boolean isReplay) {
+        this.isReplay = isReplay;
+    }
+
+    public UUID getOriginalFlowExecutionId() {
+        return originalFlowExecutionId;
+    }
+
+    public void setOriginalFlowExecutionId(UUID originalFlowExecutionId) {
+        this.originalFlowExecutionId = originalFlowExecutionId;
     }
 }

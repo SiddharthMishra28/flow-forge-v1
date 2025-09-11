@@ -2,11 +2,13 @@ package com.testautomation.orchestrator.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 
 public class ApplicationDto {
 
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Auto-generated unique identifier")
     private Long id;
 
     @NotNull(message = "GitLab project ID is required")
@@ -21,7 +23,10 @@ public class ApplicationDto {
     @NotBlank(message = "Application cannot be blank")
     private String applicationName;
 
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
+    
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was last updated")
     private LocalDateTime updatedAt;
 
     // Constructors

@@ -2,13 +2,14 @@ package com.testautomation.orchestrator.dto;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 public class FlowDto {
 
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Auto-generated unique identifier")
     private Long id;
 
     @NotNull(message = "Flow step IDs are required")
@@ -18,17 +19,18 @@ public class FlowDto {
     @NotNull(message = "Squash test case ID is required")
     private Long squashTestCaseId;
 
-    private Map<String, String> globalVariables;
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
+    
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was last updated")
     private LocalDateTime updatedAt;
 
     // Constructors
     public FlowDto() {}
 
-    public FlowDto(List<Long> flowStepIds, Long squashTestCaseId, Map<String, String> globalVariables) {
+    public FlowDto(List<Long> flowStepIds, Long squashTestCaseId) {
         this.flowStepIds = flowStepIds;
         this.squashTestCaseId = squashTestCaseId;
-        this.globalVariables = globalVariables;
     }
 
     // Getters and Setters
@@ -56,13 +58,6 @@ public class FlowDto {
         this.squashTestCaseId = squashTestCaseId;
     }
 
-    public Map<String, String> getGlobalVariables() {
-        return globalVariables;
-    }
-
-    public void setGlobalVariables(Map<String, String> globalVariables) {
-        this.globalVariables = globalVariables;
-    }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

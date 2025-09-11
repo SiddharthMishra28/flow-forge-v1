@@ -29,9 +29,6 @@ public class FlowExecution {
     @Column(name = "end_time")
     private LocalDateTime endTime;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "global_variables", columnDefinition = "json")
-    private Map<String, String> globalVariables;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "runtime_variables", columnDefinition = "json")
@@ -50,10 +47,10 @@ public class FlowExecution {
         this.id = UUID.randomUUID();
     }
 
-    public FlowExecution(Long flowId, Map<String, String> globalVariables) {
+    public FlowExecution(Long flowId, Map<String, String> runtimeVariables) {
         this();
         this.flowId = flowId;
-        this.globalVariables = globalVariables;
+        this.runtimeVariables = runtimeVariables;
         this.status = ExecutionStatus.RUNNING;
         this.startTime = LocalDateTime.now();
     }
@@ -91,13 +88,6 @@ public class FlowExecution {
         this.endTime = endTime;
     }
 
-    public Map<String, String> getGlobalVariables() {
-        return globalVariables;
-    }
-
-    public void setGlobalVariables(Map<String, String> globalVariables) {
-        this.globalVariables = globalVariables;
-    }
 
     public Map<String, String> getRuntimeVariables() {
         return runtimeVariables;

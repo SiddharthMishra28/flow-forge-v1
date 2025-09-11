@@ -2,13 +2,14 @@ package com.testautomation.orchestrator.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 public class FlowStepDto {
 
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Auto-generated unique identifier")
     private Long id;
 
     @NotNull(message = "Application ID is required")
@@ -27,21 +28,25 @@ public class FlowStepDto {
     private String testStage;
 
     private List<Long> squashStepIds;
-    private Map<String, String> initialTestData;
+    private List<Long> testDataIds;
+    
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
+    
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was last updated")
     private LocalDateTime updatedAt;
 
     // Constructors
     public FlowStepDto() {}
 
     public FlowStepDto(Long applicationId, String branch, String testTag, String testStage,
-                      List<Long> squashStepIds, Map<String, String> initialTestData) {
+                      List<Long> squashStepIds, List<Long> testDataIds) {
         this.applicationId = applicationId;
         this.branch = branch;
         this.testTag = testTag;
         this.testStage = testStage;
         this.squashStepIds = squashStepIds;
-        this.initialTestData = initialTestData;
+        this.testDataIds = testDataIds;
     }
 
     // Getters and Setters
@@ -93,12 +98,12 @@ public class FlowStepDto {
         this.squashStepIds = squashStepIds;
     }
 
-    public Map<String, String> getInitialTestData() {
-        return initialTestData;
+    public List<Long> getTestDataIds() {
+        return testDataIds;
     }
 
-    public void setInitialTestData(Map<String, String> initialTestData) {
-        this.initialTestData = initialTestData;
+    public void setTestDataIds(List<Long> testDataIds) {
+        this.testDataIds = testDataIds;
     }
 
     public LocalDateTime getCreatedAt() {

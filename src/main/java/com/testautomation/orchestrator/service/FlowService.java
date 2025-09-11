@@ -97,7 +97,6 @@ public class FlowService {
         
         existingFlow.setFlowStepIds(flowDto.getFlowStepIds());
         existingFlow.setSquashTestCaseId(flowDto.getSquashTestCaseId());
-        existingFlow.setGlobalVariables(flowDto.getGlobalVariables());
         
         Flow updatedFlow = flowRepository.save(existingFlow);
         
@@ -162,7 +161,6 @@ public class FlowService {
         Flow flow = new Flow();
         flow.setFlowStepIds(dto.getFlowStepIds());
         flow.setSquashTestCaseId(dto.getSquashTestCaseId());
-        flow.setGlobalVariables(dto.getGlobalVariables());
         return flow;
     }
 
@@ -171,7 +169,6 @@ public class FlowService {
         dto.setId(entity.getId());
         dto.setFlowStepIds(entity.getFlowStepIds());
         dto.setSquashTestCaseId(entity.getSquashTestCaseId());
-        dto.setGlobalVariables(entity.getGlobalVariables());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

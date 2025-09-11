@@ -24,8 +24,8 @@ public class PipelineExecutionService {
     private PipelineExecutionRepository pipelineExecutionRepository;
 
     public List<PipelineExecutionDto> getPipelineExecutionsByFlowExecutionId(UUID flowExecutionId) {
-        logger.debug("Fetching pipeline executions for flow execution ID: {}", flowExecutionId);
-        return pipelineExecutionRepository.findByFlowExecutionIdOrderByCreatedAt(flowExecutionId)
+        logger.debug("Fetching pipeline executions for flow execution ID: {} (including replays)", flowExecutionId);
+        return pipelineExecutionRepository.findByFlowExecutionIdIncludingReplays(flowExecutionId)
                 .stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
@@ -46,8 +46,8 @@ public class PipelineExecutionService {
     }
 
     public List<PipelineExecutionDto> getPipelineExecutionsByFlowStepId(Long flowStepId) {
-        logger.debug("Fetching pipeline executions for flow step ID: {}", flowStepId);
-        return pipelineExecutionRepository.findByFlowStepId(flowStepId)
+        logger.debug("Fetching pipeline executions for flow step ID: {} (including replays)", flowStepId);
+        return pipelineExecutionRepository.findByFlowStepIdIncludingReplays(flowStepId)
                 .stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
@@ -63,10 +63,12 @@ public class PipelineExecutionService {
         dto.setPipelineUrl(entity.getPipelineUrl());
         dto.setStartTime(entity.getStartTime());
         dto.setEndTime(entity.getEndTime());
-        dto.setInitialTestData(entity.getInitialTestData());
+        dto.setConfiguredTestData(entity.getConfiguredTestData());
         dto.setRuntimeTestData(entity.getRuntimeTestData());
         dto.setStatus(entity.getStatus());
         dto.setCreatedAt(entity.getCreatedAt());
+        dto.setIsReplay(entity.getIsReplay());
+        dto.setOriginalFlowExecutionId(entity.getOriginalFlowExecutionId());
         return dto;
     }
 }

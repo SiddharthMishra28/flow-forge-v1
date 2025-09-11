@@ -41,8 +41,8 @@ public class FlowStep {
     private List<Long> squashStepIds;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "initial_test_data", columnDefinition = "json")
-    private Map<String, String> initialTestData;
+    @Column(name = "test_data_ids", columnDefinition = "json")
+    private List<Long> testDataIds;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -56,13 +56,13 @@ public class FlowStep {
     public FlowStep() {}
 
     public FlowStep(Long applicationId, String branch, String testTag, String testStage,
-                   List<Long> squashStepIds, Map<String, String> initialTestData) {
+                   List<Long> squashStepIds, List<Long> testDataIds) {
         this.applicationId = applicationId;
         this.branch = branch;
         this.testTag = testTag;
         this.testStage = testStage;
         this.squashStepIds = squashStepIds;
-        this.initialTestData = initialTestData;
+        this.testDataIds = testDataIds;
     }
 
     // Getters and Setters
@@ -114,12 +114,12 @@ public class FlowStep {
         this.squashStepIds = squashStepIds;
     }
 
-    public Map<String, String> getInitialTestData() {
-        return initialTestData;
+    public List<Long> getTestDataIds() {
+        return testDataIds;
     }
 
-    public void setInitialTestData(Map<String, String> initialTestData) {
-        this.initialTestData = initialTestData;
+    public void setTestDataIds(List<Long> testDataIds) {
+        this.testDataIds = testDataIds;
     }
 
     public LocalDateTime getCreatedAt() {

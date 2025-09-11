@@ -92,7 +92,7 @@ public class FlowStepService {
         existingFlowStep.setTestTag(flowStepDto.getTestTag());
         existingFlowStep.setTestStage(flowStepDto.getTestStage());
         existingFlowStep.setSquashStepIds(flowStepDto.getSquashStepIds());
-        existingFlowStep.setInitialTestData(flowStepDto.getInitialTestData());
+        existingFlowStep.setTestDataIds(flowStepDto.getTestDataIds());
         
         FlowStep updatedFlowStep = flowStepRepository.save(existingFlowStep);
         
@@ -118,7 +118,7 @@ public class FlowStepService {
         flowStep.setTestTag(dto.getTestTag());
         flowStep.setTestStage(dto.getTestStage());
         flowStep.setSquashStepIds(dto.getSquashStepIds());
-        flowStep.setInitialTestData(dto.getInitialTestData());
+        flowStep.setTestDataIds(dto.getTestDataIds());
         return flowStep;
     }
 
@@ -130,7 +130,7 @@ public class FlowStepService {
         dto.setTestTag(entity.getTestTag());
         dto.setTestStage(entity.getTestStage());
         dto.setSquashStepIds(entity.getSquashStepIds());
-        dto.setInitialTestData(entity.getInitialTestData());
+        dto.setTestDataIds(entity.getTestDataIds());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

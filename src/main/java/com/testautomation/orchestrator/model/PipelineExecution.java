@@ -44,8 +44,8 @@ public class PipelineExecution {
     private LocalDateTime endTime;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "initial_test_data", columnDefinition = "json")
-    private Map<String, String> initialTestData;
+    @Column(name = "configured_test_data", columnDefinition = "json")
+    private Map<String, String> configuredTestData;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "runtime_test_data", columnDefinition = "json")
@@ -59,15 +59,21 @@ public class PipelineExecution {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "is_replay", nullable = false)
+    private Boolean isReplay = false;
+
+    @Column(name = "original_flow_execution_id")
+    private UUID originalFlowExecutionId;
+
     // Constructors
     public PipelineExecution() {}
 
     public PipelineExecution(Long flowId, UUID flowExecutionId, Long flowStepId, 
-                           Map<String, String> initialTestData, Map<String, String> runtimeTestData) {
+                           Map<String, String> configuredTestData, Map<String, String> runtimeTestData) {
         this.flowId = flowId;
         this.flowExecutionId = flowExecutionId;
         this.flowStepId = flowStepId;
-        this.initialTestData = initialTestData;
+        this.configuredTestData = configuredTestData;
         this.runtimeTestData = runtimeTestData;
         this.status = ExecutionStatus.RUNNING;
         this.startTime = LocalDateTime.now();
@@ -138,12 +144,12 @@ public class PipelineExecution {
         this.endTime = endTime;
     }
 
-    public Map<String, String> getInitialTestData() {
-        return initialTestData;
+    public Map<String, String> getConfiguredTestData() {
+        return configuredTestData;
     }
 
-    public void setInitialTestData(Map<String, String> initialTestData) {
-        this.initialTestData = initialTestData;
+    public void setConfiguredTestData(Map<String, String> configuredTestData) {
+        this.configuredTestData = configuredTestData;
     }
 
     public Map<String, String> getRuntimeTestData() {
@@ -168,5 +174,21 @@ public class PipelineExecution {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Boolean getIsReplay() {
+        return isReplay;
+    }
+
+    public void setIsReplay(Boolean isReplay) {
+        this.isReplay = isReplay;
+    }
+
+    public UUID getOriginalFlowExecutionId() {
+        return originalFlowExecutionId;
+    }
+
+    public void setOriginalFlowExecutionId(UUID originalFlowExecutionId) {
+        this.originalFlowExecutionId = originalFlowExecutionId;
     }
 }

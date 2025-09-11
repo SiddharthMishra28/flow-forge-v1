@@ -83,4 +83,35 @@ public class FlowExecutionController {
         List<FlowExecutionDto> executions = flowExecutionService.getFlowExecutionsByFlowId(flowId);
         return ResponseEntity.ok(executions);
     }
+
+    @PostMapping("/flow-executions/{flowExecutionUUID}/replay/{failedFlowStepId}")
+    @Operation(summary = "Replay/Resume a failed flow execution", 
+               description = "Create a new flow execution that resumes from a specific failed step, automatically ingesting all test data and runtime variables up to the previous stage")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "202", description = "Flow replay started successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request - flow execution must be failed or step not found"),
+            @ApiResponse(responseCode = "404", description = "Flow execution or flow step not found"),
+            @ApiResponse(responseCode = "500", description = "Failed to start flow replay")
+    })
+    public ResponseEntity<FlowExecutionDto> replayFlowExecution(
+            @Parameter(description = "Original failed flow execution UUID") @PathVariable UUID flowExecutionUUID,
+            @Parameter(description = "Flow step ID where the failure occurred") @PathVariable Long failedFlowStepId) {
+        logger.info("Starting replay of flow execution ID: {} from failed step: {}", flowExecutionUUID, failedFlowStepId);
+        
+        try {
+            // Create the replay flow execution synchronously to get the UUID
+            FlowExecutionDto replayExecutionDto = flowExecutionService.createReplayFlowExecution(flowExecutionUUID, failedFlowStepId);
+            
+            // Start async replay execution
+            flowExecutionService.executeReplayFlowAsync(replayExecutionDto.getId(), flowExecutionUUID, failedFlowStepId);
+            
+            return new ResponseEntity<>(replayExecutionDto, HttpStatus.ACCEPTED);
+        } catch (IllegalArgumentException e) {
+            logger.error("Failed to start flow replay: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            logger.error("Unexpected error starting flow replay: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 }
