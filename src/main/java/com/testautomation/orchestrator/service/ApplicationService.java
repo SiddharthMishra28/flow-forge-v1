@@ -1,8 +1,11 @@
 package com.testautomation.orchestrator.service;
 
 import com.testautomation.orchestrator.dto.ApplicationDto;
+import com.testautomation.orchestrator.dto.ValidationResponseDto;
 import com.testautomation.orchestrator.model.Application;
 import com.testautomation.orchestrator.repository.ApplicationRepository;
+import com.testautomation.orchestrator.config.GitLabConfig;
+import com.testautomation.orchestrator.util.GitLabApiClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +24,12 @@ public class ApplicationService {
 
     @Autowired
     private ApplicationRepository applicationRepository;
+
+    @Autowired
+    private GitLabApiClient gitLabApiClient;
+
+    @Autowired
+    private GitLabConfig gitLabConfig;
 
     public ApplicationDto createApplication(ApplicationDto applicationDto) {
         logger.info("Creating new application for GitLab project: {}", applicationDto.getGitlabProjectId());
@@ -84,6 +93,50 @@ public class ApplicationService {
         
         applicationRepository.deleteById(id);
         logger.info("Application deleted successfully with ID: {}", id);
+    }
+
+    public ValidationResponseDto validateGitLabConnection(String accessToken, String projectId) {
+        logger.info("Validating GitLab connection for project: {}", projectId);
+        
+        try {
+            GitLabApiClient.GitLabProjectResponse projectResponse = gitLabApiClient
+                .validateConnection(gitLabConfig.getBaseUrl(), projectId, accessToken)
+                .block(); // Blocking call for synchronous response
+            
+            if (projectResponse != null) {
+                logger.info("GitLab connection validation successful for project: {} ({})", 
+                           projectResponse.getName(), projectResponse.getNameWithNamespace());
+                
+                return new ValidationResponseDto(
+                    true,
+                    "GitLab connection successful",
+                    projectResponse.getNameWithNamespace(),
+                    projectResponse.getWebUrl()
+                );
+            } else {
+                logger.warn("GitLab connection validation failed - no response received for project: {}", projectId);
+                return new ValidationResponseDto(false, "GitLab connection failed - no response received");
+            }
+        } catch (Exception e) {
+            logger.error("GitLab connection validation failed for project {}: {}", projectId, e.getMessage());
+            
+            String errorMessage = "GitLab connection failed";
+            if (e.getMessage() != null) {
+                if (e.getMessage().contains("401")) {
+                    errorMessage = "Invalid access token or insufficient permissions";
+                } else if (e.getMessage().contains("403")) {
+                    errorMessage = "Access forbidden - check token permissions";
+                } else if (e.getMessage().contains("404")) {
+                    errorMessage = "Project not found or access denied";
+                } else if (e.getMessage().contains("timeout")) {
+                    errorMessage = "Connection timeout - GitLab server may be unreachable";
+                } else {
+                    errorMessage = "GitLab connection failed: " + e.getMessage();
+                }
+            }
+            
+            return new ValidationResponseDto(false, errorMessage);
+        }
     }
 
     private Application convertToEntity(ApplicationDto dto) {

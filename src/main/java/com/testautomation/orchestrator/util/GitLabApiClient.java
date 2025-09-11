@@ -106,6 +106,28 @@ public class GitLabApiClient {
                 .doOnError(error -> logger.debug("Failed to download artifact from job {}: {}", jobId, error.getMessage()));
     }
 
+    /**
+     * Validate GitLab connection by fetching project details
+     */
+    public Mono<GitLabProjectResponse> validateConnection(String gitlabBaseUrl, String projectId, String accessToken) {
+        String url = String.format("%s/api/v4/projects/%s", gitlabBaseUrl, projectId);
+        
+        logger.info("Validating GitLab connection for project {}", projectId);
+        
+        return webClient.get()
+                .uri(url)
+                .header("PRIVATE-TOKEN", accessToken)
+                .retrieve()
+                .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
+                         response -> response.bodyToMono(String.class)
+                                 .doOnNext(body -> logger.error("GitLab validation error response: {}", body))
+                                 .then(Mono.error(new RuntimeException("GitLab validation failed: " + response.statusCode()))))
+                .bodyToMono(GitLabProjectResponse.class)
+                .timeout(Duration.ofSeconds(15))
+                .doOnSuccess(response -> logger.info("GitLab connection validated successfully for project: {}", response.getName()))
+                .doOnError(error -> logger.error("Failed to validate GitLab connection: {}", error.getMessage()));
+    }
+
     // Inner classes for GitLab API request/response
     public static class GitLabPipelineRequest {
         private String ref;
@@ -330,6 +352,72 @@ public class GitLabApiClient {
 
         public boolean isSuccessful() {
             return "success".equals(status);
+        }
+    }
+
+    public static class GitLabProjectResponse {
+        private Long id;
+        private String name;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("name_with_namespace")
+        private String nameWithNamespace;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("web_url")
+        private String webUrl;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("default_branch")
+        private String defaultBranch;
+        
+        private String description;
+
+        public GitLabProjectResponse() {}
+
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getNameWithNamespace() {
+            return nameWithNamespace;
+        }
+
+        public void setNameWithNamespace(String nameWithNamespace) {
+            this.nameWithNamespace = nameWithNamespace;
+        }
+
+        public String getWebUrl() {
+            return webUrl;
+        }
+
+        public void setWebUrl(String webUrl) {
+            this.webUrl = webUrl;
+        }
+
+        public String getDefaultBranch() {
+            return defaultBranch;
+        }
+
+        public void setDefaultBranch(String defaultBranch) {
+            this.defaultBranch = defaultBranch;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
         }
     }
 }

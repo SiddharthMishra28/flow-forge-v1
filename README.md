@@ -155,6 +155,34 @@ curl -X PUT http://localhost:8080/api/applications/1 \
 curl -X DELETE http://localhost:8080/api/applications/1
 ```
 
+**Validate GitLab Connection**
+```bash
+curl -X POST http://localhost:8080/api/applications/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accessToken": "glpat-xxxxxxxxxxxxxxxxxxxx",
+    "projectId": "12345"
+  }'
+```
+
+**Successful Response (200):**
+```json
+{
+  "valid": true,
+  "message": "GitLab connection successful",
+  "projectName": "username/my-awesome-project",
+  "projectUrl": "https://gitlab.com/username/my-awesome-project"
+}
+```
+
+**Failed Response (401/403/404/500):**
+```json
+{
+  "valid": false,
+  "message": "Invalid access token or insufficient permissions"
+}
+```
+
 #### 2. Test Data Management
 
 **Create Test Data**

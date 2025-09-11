@@ -1,6 +1,8 @@
 package com.testautomation.orchestrator.controller;
 
 import com.testautomation.orchestrator.dto.ApplicationDto;
+import com.testautomation.orchestrator.dto.ValidationRequestDto;
+import com.testautomation.orchestrator.dto.ValidationResponseDto;
 import com.testautomation.orchestrator.service.ApplicationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -114,6 +116,53 @@ public class ApplicationController {
         } catch (IllegalArgumentException e) {
             logger.error("Failed to delete application: {}", e.getMessage());
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PostMapping("/validate")
+    @Operation(summary = "Validate GitLab connection", description = "Validate GitLab connectivity using access token and project ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "GitLab connection validated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data"),
+            @ApiResponse(responseCode = "401", description = "Invalid access token"),
+            @ApiResponse(responseCode = "403", description = "Access forbidden - insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Project not found"),
+            @ApiResponse(responseCode = "500", description = "GitLab connection failed")
+    })
+    public ResponseEntity<ValidationResponseDto> validateGitLabConnection(
+            @Valid @RequestBody ValidationRequestDto validationRequest) {
+        logger.info("Validating GitLab connection for project: {}", validationRequest.getProjectId());
+        
+        try {
+            ValidationResponseDto response = applicationService.validateGitLabConnection(
+                validationRequest.getAccessToken(), 
+                validationRequest.getProjectId()
+            );
+            
+            if (response.isValid()) {
+                logger.info("GitLab connection validation successful for project: {}", validationRequest.getProjectId());
+                return ResponseEntity.ok(response);
+            } else {
+                logger.warn("GitLab connection validation failed for project: {}", validationRequest.getProjectId());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            }
+        } catch (Exception e) {
+            logger.error("GitLab connection validation error for project {}: {}", 
+                        validationRequest.getProjectId(), e.getMessage());
+            
+            ValidationResponseDto errorResponse = new ValidationResponseDto(false, 
+                "GitLab connection failed: " + e.getMessage());
+            
+            // Determine appropriate HTTP status based on error type
+            if (e.getMessage().contains("401") || e.getMessage().contains("Unauthorized")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+            } else if (e.getMessage().contains("403") || e.getMessage().contains("Forbidden")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+            } else if (e.getMessage().contains("404") || e.getMessage().contains("Not Found")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+            }
         }
     }
 }
