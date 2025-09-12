@@ -28,6 +28,10 @@ public class Application {
     @Column(name = "application_name", nullable = false)
     private String applicationName;
 
+    @NotBlank
+    @Column(name = "application_description", nullable = false)
+    private String applicationDescription;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -91,5 +95,13 @@ public class Application {
 
     public void setApplicationName(String applicationName) {
         this.applicationName = applicationName;
+    }
+
+    public String getApplicationDescription() {
+        return applicationDescription;
+    }
+
+    public void setApplicationDescription(String applicationDescription) {
+        this.applicationDescription = applicationDescription;
     }
 }

@@ -144,6 +144,7 @@ public class ApplicationService {
         application.setGitlabProjectId(dto.getGitlabProjectId());
         application.setPersonalAccessToken(dto.getPersonalAccessToken());
         application.setApplicationName(dto.getApplicationName());
+        application.setApplicationDescription(dto.getApplicationDescription());
         return application;
     }
 
@@ -153,6 +154,7 @@ public class ApplicationService {
         dto.setGitlabProjectId(entity.getGitlabProjectId());
         dto.setPersonalAccessToken(entity.getPersonalAccessToken());
         dto.setApplicationName(entity.getApplicationName());
+        dto.setApplicationDescription(entity.getApplicationDescription());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

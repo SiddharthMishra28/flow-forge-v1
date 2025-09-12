@@ -23,6 +23,10 @@ public class ApplicationDto {
     @NotBlank(message = "Application cannot be blank")
     private String applicationName;
 
+    @NotNull(message = "Application is required")
+    @NotBlank(message = "Application cannot be blank")
+    private String applicationDescription;
+
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
     
@@ -84,5 +88,13 @@ public class ApplicationDto {
 
     public void setApplicationName(String applicationName) {
         this.applicationName = applicationName;
+    }
+
+    public String getApplicationDescription() {
+        return applicationDescription;
+    }
+
+    public void setApplicationDescription(String applicationDescription) {
+        this.applicationDescription = applicationDescription;
     }
 }
