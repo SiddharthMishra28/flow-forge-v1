@@ -32,6 +32,12 @@ public class Application {
     @Column(name = "application_description", nullable = false)
     private String applicationDescription;
 
+    @Column(name = "project_name")
+    private String projectName;
+
+    @Column(name = "project_url")
+    private String projectUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -103,5 +109,21 @@ public class Application {
 
     public void setApplicationDescription(String applicationDescription) {
         this.applicationDescription = applicationDescription;
+    }
+
+    public String getProjectName() {
+        return projectName;
+    }
+
+    public void setProjectName(String projectName) {
+        this.projectName = projectName;
+    }
+
+    public String getProjectUrl() {
+        return projectUrl;
+    }
+
+    public void setProjectUrl(String projectUrl) {
+        this.projectUrl = projectUrl;
     }
 }

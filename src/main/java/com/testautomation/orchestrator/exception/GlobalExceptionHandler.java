@@ -18,6 +18,39 @@ public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(GitLabValidationException.class)
+    public ResponseEntity<ErrorResponse> handleGitLabValidationException(GitLabValidationException ex) {
+        logger.error("GitLab validation failed: {}", ex.getMessage());
+        
+        // Determine appropriate status code based on error message
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+        String errorType = "GitLab Validation Failed";
+        
+        String message = ex.getMessage().toLowerCase();
+        if (message.contains("401") || message.contains("unauthorized") || message.contains("invalid access token")) {
+            status = HttpStatus.UNAUTHORIZED;
+            errorType = "Unauthorized";
+        } else if (message.contains("403") || message.contains("forbidden") || message.contains("insufficient permissions")) {
+            status = HttpStatus.FORBIDDEN;
+            errorType = "Forbidden";
+        } else if (message.contains("404") || message.contains("not found") || message.contains("project not found")) {
+            status = HttpStatus.NOT_FOUND;
+            errorType = "Not Found";
+        } else if (message.contains("timeout") || message.contains("connection") || message.contains("unreachable")) {
+            status = HttpStatus.REQUEST_TIMEOUT;
+            errorType = "Request Timeout";
+        }
+        
+        ErrorResponse errorResponse = new ErrorResponse(
+                status.value(),
+                errorType,
+                ex.getMessage(),
+                LocalDateTime.now()
+        );
+        
+        return new ResponseEntity<>(errorResponse, status);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex) {
         logger.error("IllegalArgumentException: {}", ex.getMessage());

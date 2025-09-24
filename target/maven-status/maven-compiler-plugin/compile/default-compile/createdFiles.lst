@@ -41,6 +41,8 @@ com\testautomation\orchestrator\model\TestData.class
 com\testautomation\orchestrator\service\FlowExecutionService.class
 com\testautomation\orchestrator\dto\analytics\DurationStatsDto.class
 com\testautomation\orchestrator\PipelineOrchestratorApplication.class
+com\testautomation\orchestrator\exception\GitLabValidationException.class
+com\testautomation\orchestrator\service\EncryptionService.class
 com\testautomation\orchestrator\dto\analytics\TrendDataDto.class
 com\testautomation\orchestrator\dto\analytics\MetricsSummaryDto.class
 com\testautomation\orchestrator\repository\ApplicationRepository.class

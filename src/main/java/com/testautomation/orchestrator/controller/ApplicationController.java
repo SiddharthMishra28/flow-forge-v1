@@ -40,13 +40,8 @@ public class ApplicationController {
             @Valid @RequestBody ApplicationDto applicationDto) {
         logger.info("Creating new application for GitLab project: {}", applicationDto.getGitlabProjectId());
         
-        try {
-            ApplicationDto createdApplication = applicationService.createApplication(applicationDto);
-            return new ResponseEntity<>(createdApplication, HttpStatus.CREATED);
-        } catch (IllegalArgumentException e) {
-            logger.error("Failed to create application: {}", e.getMessage());
-            return new ResponseEntity<>(HttpStatus.CONFLICT);
-        }
+        ApplicationDto createdApplication = applicationService.createApplication(applicationDto);
+        return new ResponseEntity<>(createdApplication, HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")
@@ -87,17 +82,8 @@ public class ApplicationController {
             @Valid @RequestBody ApplicationDto applicationDto) {
         logger.info("Updating application with ID: {}", id);
         
-        try {
-            ApplicationDto updatedApplication = applicationService.updateApplication(id, applicationDto);
-            return ResponseEntity.ok(updatedApplication);
-        } catch (IllegalArgumentException e) {
-            logger.error("Failed to update application: {}", e.getMessage());
-            if (e.getMessage().contains("not found")) {
-                return ResponseEntity.notFound().build();
-            } else {
-                return ResponseEntity.status(HttpStatus.CONFLICT).build();
-            }
-        }
+        ApplicationDto updatedApplication = applicationService.updateApplication(id, applicationDto);
+        return ResponseEntity.ok(updatedApplication);
     }
 
     @DeleteMapping("/{id}")

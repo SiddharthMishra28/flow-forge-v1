@@ -3,6 +3,7 @@ package com.testautomation.orchestrator.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
 
@@ -17,6 +18,8 @@ public class ApplicationDto {
 
     @NotNull(message = "Personal access token is required")
     @NotBlank(message = "Personal access token cannot be blank")
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Schema(accessMode = Schema.AccessMode.WRITE_ONLY, description = "Personal access token (write-only)")
     private String personalAccessToken;
 
     @NotNull(message = "Application is required")
@@ -26,6 +29,12 @@ public class ApplicationDto {
     @NotNull(message = "Application is required")
     @NotBlank(message = "Application cannot be blank")
     private String applicationDescription;
+
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "GitLab project name")
+    private String projectName;
+
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "GitLab project URL")
+    private String projectUrl;
 
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
@@ -96,5 +105,21 @@ public class ApplicationDto {
 
     public void setApplicationDescription(String applicationDescription) {
         this.applicationDescription = applicationDescription;
+    }
+
+    public String getProjectName() {
+        return projectName;
+    }
+
+    public void setProjectName(String projectName) {
+        this.projectName = projectName;
+    }
+
+    public String getProjectUrl() {
+        return projectUrl;
+    }
+
+    public void setProjectUrl(String projectUrl) {
+        this.projectUrl = projectUrl;
     }
 }

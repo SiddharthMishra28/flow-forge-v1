@@ -49,6 +49,9 @@ public class FlowExecutionService {
     private OutputEnvParser outputEnvParser;
 
     @Autowired
+    private ApplicationService applicationService;
+
+    @Autowired
     private com.testautomation.orchestrator.config.GitLabConfig gitLabConfig;
 
     public FlowExecutionDto createFlowExecution(Long flowId) {
@@ -322,7 +325,7 @@ public class FlowExecutionService {
                 try {
                     response = gitLabApiClient
                             .triggerPipeline(gitLabConfig.getBaseUrl(), application.getGitlabProjectId(), 
-                                           step.getBranch(), application.getPersonalAccessToken(), mergedVariables)
+                                           step.getBranch(), applicationService.getDecryptedPersonalAccessToken(application.getId()), mergedVariables)
                             .doOnError(error -> {
                                 logger.error("GitLab API call failed for REPLAY project {} on branch {}: {}", 
                                            application.getGitlabProjectId(), step.getBranch(), error.getMessage());
@@ -409,7 +412,7 @@ public class FlowExecutionService {
                 try {
                     response = gitLabApiClient
                             .triggerPipeline(gitLabConfig.getBaseUrl(), application.getGitlabProjectId(), 
-                                           step.getBranch(), application.getPersonalAccessToken(), mergedVariables)
+                                           step.getBranch(), applicationService.getDecryptedPersonalAccessToken(application.getId()), mergedVariables)
                             .doOnError(error -> {
                                 logger.error("GitLab API call failed for project {} on branch {}: {}", 
                                            application.getGitlabProjectId(), step.getBranch(), error.getMessage());
@@ -457,7 +460,7 @@ public class FlowExecutionService {
             // Get pipeline jobs
             GitLabApiClient.GitLabJobsResponse[] jobs = gitLabApiClient
                     .getPipelineJobs(gitlabBaseUrl, application.getGitlabProjectId(),
-                                   pipelineExecution.getPipelineId(), application.getPersonalAccessToken())
+                                   pipelineExecution.getPipelineId(), applicationService.getDecryptedPersonalAccessToken(application.getId()))
                     .block();
             
             if (jobs != null && jobs.length > 0) {
@@ -477,7 +480,7 @@ public class FlowExecutionService {
                     // Download output.env from target/output.env
                     String artifactContent = gitLabApiClient
                             .downloadJobArtifact(gitlabBaseUrl, application.getGitlabProjectId(),
-                                               targetJob.getId(), application.getPersonalAccessToken(), "target/output.env")
+                                               targetJob.getId(), applicationService.getDecryptedPersonalAccessToken(application.getId()), "target/output.env")
                             .block();
                     
                     if (artifactContent != null && !artifactContent.trim().isEmpty()) {
@@ -543,7 +546,7 @@ public class FlowExecutionService {
             while (true) {
                 GitLabApiClient.GitLabPipelineResponse status = gitLabApiClient
                         .getPipelineStatus(gitlabBaseUrl, application.getGitlabProjectId(),
-                                         pipelineExecution.getPipelineId(), application.getPersonalAccessToken())
+                                         pipelineExecution.getPipelineId(), applicationService.getDecryptedPersonalAccessToken(application.getId()))
                         .block();
                 
                 if (status != null && status.isCompleted()) {
@@ -651,7 +654,11 @@ public class FlowExecutionService {
         ApplicationDto dto = new ApplicationDto();
         dto.setId(entity.getId());
         dto.setGitlabProjectId(entity.getGitlabProjectId());
-        dto.setPersonalAccessToken("***"); // Mask the token for security
+        // Don't set personalAccessToken as it's write-only now
+        dto.setApplicationName(entity.getApplicationName());
+        dto.setApplicationDescription(entity.getApplicationDescription());
+        dto.setProjectName(entity.getProjectName());
+        dto.setProjectUrl(entity.getProjectUrl());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
