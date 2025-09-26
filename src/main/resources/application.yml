@@ -42,12 +42,13 @@ gitlab:
   timeout: 60
   max-retries: 3
 
-# SquashTM configuration
-squashtm:
-  base-url: https://demo.squashtest.org/squash
-  api-token: eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIyIiwidXVpZCI6ImVmMWY1ZDFjLTkxYmEtNDYyYS1hMjJkLWQ4MDIzZmNmYTFmMCIsInBlcm1pc3Npb25zIjoiUkVBRF9XUklURSIsImlhdCI6MTc1NjY1ODE1NywiZXhwIjoxNzg4MDQ4MDAwfQ.L85847WTiChrbchYWCQhaXeIwYssSLeDZ1TtyvjEuXHeeN8msN1BGJuBYxEN3ju6lHC6FS8N7sA0GUTBWTq0RA
-  timeout: 60
-  max-retries: 3
+# Scheduling Configuration
+scheduling:
+  token-validation:
+    # Cron expression for token validation job (default: every day at 2:00 AM)
+    # Format: second minute hour day month weekday
+    # 0 0 2 * * * = Every day at 2:00 AM
+    cron: ${TOKEN_VALIDATION_CRON:0 0 2 * * *}
 
 ---
 spring:

@@ -215,6 +215,10 @@ public class ApplicationService {
         application.setApplicationDescription(dto.getApplicationDescription());
         application.setProjectName(dto.getProjectName());
         application.setProjectUrl(dto.getProjectUrl());
+        // Set default token status as ACTIVE for new applications
+        if (dto.getTokenStatus() != null) {
+            application.setTokenStatus(dto.getTokenStatus());
+        }
         return application;
     }
 
@@ -228,6 +232,7 @@ public class ApplicationService {
         dto.setApplicationDescription(entity.getApplicationDescription());
         dto.setProjectName(entity.getProjectName());
         dto.setProjectUrl(entity.getProjectUrl());
+        dto.setTokenStatus(entity.getTokenStatus());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

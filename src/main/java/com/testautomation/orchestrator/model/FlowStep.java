@@ -36,6 +36,9 @@ public class FlowStep {
     @Column(name = "test_stage", nullable = false)
     private String testStage;
 
+    @Column(name = "description")
+    private String description;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "squash_step_ids", columnDefinition = "json")
     private List<Long> squashStepIds;
@@ -55,12 +58,13 @@ public class FlowStep {
     // Constructors
     public FlowStep() {}
 
-    public FlowStep(Long applicationId, String branch, String testTag, String testStage,
+    public FlowStep(Long applicationId, String branch, String testTag, String testStage, String description,
                    List<Long> squashStepIds, List<Long> testDataIds) {
         this.applicationId = applicationId;
         this.branch = branch;
         this.testTag = testTag;
         this.testStage = testStage;
+        this.description = description;
         this.squashStepIds = squashStepIds;
         this.testDataIds = testDataIds;
     }
@@ -104,6 +108,14 @@ public class FlowStep {
 
     public void setTestStage(String testStage) {
         this.testStage = testStage;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public List<Long> getSquashStepIds() {

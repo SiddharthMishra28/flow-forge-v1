@@ -82,4 +82,25 @@ public class PipelineExecutionController {
                 pipelineExecutionService.getPipelineExecutionsByFlowStepId(flowStepId);
         return ResponseEntity.ok(pipelineExecutions);
     }
+
+    @GetMapping("/{flowExecutionUUID}/gitlab-pipelines/{gitlabPipelineId}")
+    @Operation(summary = "Get pipeline execution by GitLab pipeline ID", 
+               description = "Get pipeline execution details using the GitLab pipeline ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Pipeline execution found"),
+            @ApiResponse(responseCode = "404", description = "Pipeline execution not found")
+    })
+    public ResponseEntity<PipelineExecutionDto> getPipelineExecutionByGitLabId(
+            @Parameter(description = "Flow execution UUID") @PathVariable UUID flowExecutionUUID,
+            @Parameter(description = "GitLab pipeline ID") @PathVariable Long gitlabPipelineId) {
+        logger.debug("Fetching pipeline execution with GitLab pipeline ID: {} for flow execution: {}", gitlabPipelineId, flowExecutionUUID);
+        
+        List<PipelineExecutionDto> pipelineExecutions = pipelineExecutionService.getPipelineExecutionsByFlowExecutionId(flowExecutionUUID);
+        
+        return pipelineExecutions.stream()
+                .filter(pipeline -> gitlabPipelineId.equals(pipeline.getPipelineId()))
+                .findFirst()
+                .map(pipeline -> ResponseEntity.ok(pipeline))
+                .orElse(ResponseEntity.notFound().build());
+    }
 }

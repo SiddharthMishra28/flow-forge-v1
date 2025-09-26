@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import com.testautomation.orchestrator.enums.TokenStatus;
 
 import java.time.LocalDateTime;
 
@@ -37,6 +38,10 @@ public class Application {
 
     @Column(name = "project_url")
     private String projectUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "token_status", nullable = false)
+    private TokenStatus tokenStatus = TokenStatus.ACTIVE;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -125,5 +130,13 @@ public class Application {
 
     public void setProjectUrl(String projectUrl) {
         this.projectUrl = projectUrl;
+    }
+
+    public TokenStatus getTokenStatus() {
+        return tokenStatus;
+    }
+
+    public void setTokenStatus(TokenStatus tokenStatus) {
+        this.tokenStatus = tokenStatus;
     }
 }

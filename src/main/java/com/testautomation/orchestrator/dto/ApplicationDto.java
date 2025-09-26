@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.testautomation.orchestrator.enums.TokenStatus;
 
 import java.time.LocalDateTime;
 
@@ -35,6 +36,9 @@ public class ApplicationDto {
 
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "GitLab project URL")
     private String projectUrl;
+
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Token validation status")
+    private TokenStatus tokenStatus;
 
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
@@ -121,5 +125,13 @@ public class ApplicationDto {
 
     public void setProjectUrl(String projectUrl) {
         this.projectUrl = projectUrl;
+    }
+
+    public TokenStatus getTokenStatus() {
+        return tokenStatus;
+    }
+
+    public void setTokenStatus(TokenStatus tokenStatus) {
+        this.tokenStatus = tokenStatus;
     }
 }

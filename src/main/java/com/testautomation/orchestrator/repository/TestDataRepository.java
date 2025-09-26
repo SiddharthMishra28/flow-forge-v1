@@ -10,4 +10,6 @@ import java.util.List;
 public interface TestDataRepository extends JpaRepository<TestData, Long> {
     
     List<TestData> findByDataIdIn(List<Long> dataIds);
+    
+    void deleteByDataIdIn(List<Long> dataIds);
 }

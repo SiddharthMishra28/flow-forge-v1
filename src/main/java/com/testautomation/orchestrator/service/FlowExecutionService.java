@@ -54,6 +54,9 @@ public class FlowExecutionService {
     @Autowired
     private com.testautomation.orchestrator.config.GitLabConfig gitLabConfig;
 
+    @Autowired
+    private FlowExecutionLoggingService loggingService;
+
     public FlowExecutionDto createFlowExecution(Long flowId) {
         logger.info("Creating flow execution for flow ID: {}", flowId);
         
@@ -72,14 +75,19 @@ public class FlowExecutionService {
     public CompletableFuture<FlowExecutionDto> executeFlowAsync(UUID flowExecutionId) {
         logger.info("Starting async execution of flow execution ID: {}", flowExecutionId);
         
-        FlowExecution flowExecution = flowExecutionRepository.findById(flowExecutionId)
-                .orElseThrow(() -> new IllegalArgumentException("Flow execution not found with ID: " + flowExecutionId));
-        
-        final Long flowId = flowExecution.getFlowId();
-        Flow flow = flowRepository.findById(flowId)
-                .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
+        // Set up logging context manually
+        org.slf4j.MDC.put("flowExecutionId", flowExecutionId.toString());
+        loggingService.sendLogMessage(flowExecutionId, "Flow execution started - logging context initialized");
         
         try {
+            FlowExecution flowExecution = flowExecutionRepository.findById(flowExecutionId)
+                    .orElseThrow(() -> new IllegalArgumentException("Flow execution not found with ID: " + flowExecutionId));
+            
+            final Long flowId = flowExecution.getFlowId();
+            Flow flow = flowRepository.findById(flowId)
+                    .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
+            
+            try {
             // Execute steps sequentially
             Map<String, String> accumulatedRuntimeVariables = new HashMap<>();
             
@@ -140,7 +148,15 @@ public class FlowExecutionService {
             flowExecution = flowExecutionRepository.save(flowExecution);
         }
         
-        return CompletableFuture.completedFuture(convertToDto(flowExecution));
+            loggingService.sendLogMessage(flowExecutionId, "Flow execution completed");
+            return CompletableFuture.completedFuture(convertToDto(flowExecution));
+        } catch (Exception e) {
+            loggingService.sendLogMessage(flowExecutionId, "Flow execution failed: " + e.getMessage());
+            throw e;
+        } finally {
+            org.slf4j.MDC.remove("flowExecutionId");
+            loggingService.sendLogMessage(flowExecutionId, "Flow execution logging context closed");
+        }
     }
 
     public FlowExecutionDto createReplayFlowExecution(UUID originalFlowExecutionId, Long failedFlowStepId) {
@@ -176,14 +192,19 @@ public class FlowExecutionService {
     public CompletableFuture<FlowExecutionDto> executeReplayFlowAsync(UUID replayFlowExecutionId, UUID originalFlowExecutionId, Long failedFlowStepId) {
         logger.info("Starting async replay execution of flow execution ID: {} from step: {}", replayFlowExecutionId, failedFlowStepId);
         
-        FlowExecution replayExecution = flowExecutionRepository.findById(replayFlowExecutionId)
-                .orElseThrow(() -> new IllegalArgumentException("Replay flow execution not found with ID: " + replayFlowExecutionId));
-        
-        final Long flowId = replayExecution.getFlowId();
-        Flow flow = flowRepository.findById(flowId)
-                .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
+        // Set up logging context manually
+        org.slf4j.MDC.put("flowExecutionId", replayFlowExecutionId.toString());
+        loggingService.sendLogMessage(replayFlowExecutionId, "Replay flow execution started - logging context initialized");
         
         try {
+            FlowExecution replayExecution = flowExecutionRepository.findById(replayFlowExecutionId)
+                    .orElseThrow(() -> new IllegalArgumentException("Replay flow execution not found with ID: " + replayFlowExecutionId));
+            
+            final Long flowId = replayExecution.getFlowId();
+            Flow flow = flowRepository.findById(flowId)
+                    .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
+            
+            try {
             // Start execution from the failed step onwards
             Map<String, String> accumulatedRuntimeVariables = new HashMap<>(replayExecution.getRuntimeVariables());
             int failedStepIndex = flow.getFlowStepIds().indexOf(failedFlowStepId);
@@ -245,7 +266,15 @@ public class FlowExecutionService {
             replayExecution = flowExecutionRepository.save(replayExecution);
         }
         
-        return CompletableFuture.completedFuture(convertToDto(replayExecution));
+            loggingService.sendLogMessage(replayFlowExecutionId, "Replay flow execution completed");
+            return CompletableFuture.completedFuture(convertToDto(replayExecution));
+        } catch (Exception e) {
+            loggingService.sendLogMessage(replayFlowExecutionId, "Replay flow execution failed: " + e.getMessage());
+            throw e;
+        } finally {
+            org.slf4j.MDC.remove("flowExecutionId");
+            loggingService.sendLogMessage(replayFlowExecutionId, "Replay flow execution logging context closed");
+        }
     }
 
     private Map<String, String> extractRuntimeVariablesUpToStep(UUID originalFlowExecutionId, Long failedFlowStepId, Flow flow) {
@@ -659,6 +688,7 @@ public class FlowExecutionService {
         dto.setApplicationDescription(entity.getApplicationDescription());
         dto.setProjectName(entity.getProjectName());
         dto.setProjectUrl(entity.getProjectUrl());
+        dto.setTokenStatus(entity.getTokenStatus());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
