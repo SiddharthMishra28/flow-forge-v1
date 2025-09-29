@@ -1,6 +1,7 @@
 package com.testautomation.orchestrator.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.hibernate.annotations.CreationTimestamp;
@@ -47,6 +48,10 @@ public class FlowStep {
     @Column(name = "test_data_ids", columnDefinition = "json")
     private List<Long> testDataIds;
 
+    @Embedded
+    @Valid
+    private InvokeTimer invokeTimer;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -59,7 +64,7 @@ public class FlowStep {
     public FlowStep() {}
 
     public FlowStep(Long applicationId, String branch, String testTag, String testStage, String description,
-                   List<Long> squashStepIds, List<Long> testDataIds) {
+                   List<Long> squashStepIds, List<Long> testDataIds, InvokeTimer invokeTimer) {
         this.applicationId = applicationId;
         this.branch = branch;
         this.testTag = testTag;
@@ -67,6 +72,7 @@ public class FlowStep {
         this.description = description;
         this.squashStepIds = squashStepIds;
         this.testDataIds = testDataIds;
+        this.invokeTimer = invokeTimer;
     }
 
     // Getters and Setters
@@ -132,6 +138,14 @@ public class FlowStep {
 
     public void setTestDataIds(List<Long> testDataIds) {
         this.testDataIds = testDataIds;
+    }
+
+    public InvokeTimer getInvokeTimer() {
+        return invokeTimer;
+    }
+
+    public void setInvokeTimer(InvokeTimer invokeTimer) {
+        this.invokeTimer = invokeTimer;
     }
 
     public LocalDateTime getCreatedAt() {

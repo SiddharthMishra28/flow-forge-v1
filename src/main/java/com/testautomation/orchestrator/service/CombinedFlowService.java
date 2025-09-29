@@ -2,9 +2,13 @@ package com.testautomation.orchestrator.service;
 
 import com.testautomation.orchestrator.dto.CombinedFlowDto;
 import com.testautomation.orchestrator.dto.CombinedFlowStepDto;
+import com.testautomation.orchestrator.dto.DelayDto;
+import com.testautomation.orchestrator.dto.InvokeTimerDto;
 import com.testautomation.orchestrator.dto.TestDataDto;
+import com.testautomation.orchestrator.model.Delay;
 import com.testautomation.orchestrator.model.Flow;
 import com.testautomation.orchestrator.model.FlowStep;
+import com.testautomation.orchestrator.model.InvokeTimer;
 import com.testautomation.orchestrator.model.TestData;
 import com.testautomation.orchestrator.repository.ApplicationRepository;
 import com.testautomation.orchestrator.repository.FlowRepository;
@@ -63,6 +67,7 @@ public class CombinedFlowService {
             flowStep.setDescription(stepDto.getDescription());
             flowStep.setSquashStepIds(stepDto.getSquashStepIds());
             flowStep.setTestDataIds(testDataIds);
+            flowStep.setInvokeTimer(convertInvokeTimerDtoToEntity(stepDto.getInvokeTimer()));
             
             FlowStep savedFlowStep = flowStepRepository.save(flowStep);
             savedFlowSteps.add(savedFlowStep);
@@ -151,6 +156,7 @@ public class CombinedFlowService {
             flowStep.setDescription(stepDto.getDescription());
             flowStep.setSquashStepIds(stepDto.getSquashStepIds());
             flowStep.setTestDataIds(testDataIds);
+            flowStep.setInvokeTimer(convertInvokeTimerDtoToEntity(stepDto.getInvokeTimer()));
             
             FlowStep savedFlowStep = flowStepRepository.save(flowStep);
             newFlowSteps.add(savedFlowStep);
@@ -247,6 +253,7 @@ public class CombinedFlowService {
         dto.setTestStage(flowStep.getTestStage());
         dto.setDescription(flowStep.getDescription());
         dto.setSquashStepIds(flowStep.getSquashStepIds());
+        dto.setInvokeTimer(convertInvokeTimerEntityToDto(flowStep.getInvokeTimer()));
         dto.setCreatedAt(flowStep.getCreatedAt());
         dto.setUpdatedAt(flowStep.getUpdatedAt());
         
@@ -259,6 +266,44 @@ public class CombinedFlowService {
             dto.setTestData(testDataMaps);
         } else {
             dto.setTestData(new ArrayList<>());
+        }
+        
+        return dto;
+    }
+
+    private InvokeTimer convertInvokeTimerDtoToEntity(InvokeTimerDto dto) {
+        if (dto == null) {
+            return null;
+        }
+        
+        InvokeTimer entity = new InvokeTimer();
+        entity.setIsScheduled(dto.getIsScheduled());
+        entity.setScheduledCron(dto.getScheduledCron());
+        
+        if (dto.getDelay() != null) {
+            Delay delay = new Delay();
+            delay.setTimeUnit(dto.getDelay().getTimeUnit());
+            delay.setValue(dto.getDelay().getValue());
+            entity.setDelay(delay);
+        }
+        
+        return entity;
+    }
+
+    private InvokeTimerDto convertInvokeTimerEntityToDto(InvokeTimer entity) {
+        if (entity == null) {
+            return null;
+        }
+        
+        InvokeTimerDto dto = new InvokeTimerDto();
+        dto.setIsScheduled(entity.getIsScheduled());
+        dto.setScheduledCron(entity.getScheduledCron());
+        
+        if (entity.getDelay() != null) {
+            DelayDto delayDto = new DelayDto();
+            delayDto.setTimeUnit(entity.getDelay().getTimeUnit());
+            delayDto.setValue(entity.getDelay().getValue());
+            dto.setDelay(delayDto);
         }
         
         return dto;

@@ -17,6 +17,7 @@ A comprehensive Spring Boot 3.x application for End-to-End Test Automation Pipel
 - **Database Support**: H2 for development, PostgreSQL for production
 - **Production Ready**: Includes monitoring, logging, error handling, and scalability features
 - **Test Data Management**: Sophisticated test data management with runtime variable merging
+- **Flow Scheduling & Delays**: Advanced timing control with delay and cron-based scheduling for flow steps
 
 ## 💻 System Requirements
 
@@ -537,6 +538,199 @@ curl -X POST http://localhost:8080/api/flows \
 
 **Response:** Note the `id` field (e.g., `1`) for execution.
 
+### 🔥 Enhanced Flow Creation API (Recommended)
+
+The **Enhanced Flow Creation API** allows you to create flows with embedded flow steps and test data in a single API call, eliminating the need to create flow steps and test data separately. This approach also supports advanced features like **InvokeTimer** for scheduling and delays.
+
+#### Enhanced Flow Creation with InvokeTimer
+
+**Create Flow with Embedded Steps and Timer Configuration:**
+
+```bash
+curl -X POST http://localhost:8080/api/flows \
+  -H "Content-Type: application/json" \
+  -d '{
+    "flowSteps": [
+      {
+        "applicationId": 1,
+        "branch": "main",
+        "testTag": "regression",
+        "testStage": "test",
+        "description": "Login tests with 10-minute delay",
+        "squashStepIds": [1, 2],
+        "testData": [
+          {
+            "BASE_URL": "https://staging.example.com",
+            "USERNAME": "test.user@example.com",
+            "PASSWORD": "SecurePassword123"
+          }
+        ],
+        "invokeTimer": {
+          "delay": {
+            "timeUnit": "minutes",
+            "value": "+10"
+          },
+          "isScheduled": false
+        }
+      },
+      {
+        "applicationId": 1,
+        "branch": "main",
+        "testTag": "user-management",
+        "testStage": "test",
+        "description": "User management tests scheduled for 2 AM",
+        "squashStepIds": [3],
+        "testData": [
+          {
+            "ADMIN_USER": "admin@example.com",
+            "ADMIN_PASSWORD": "AdminPass123"
+          }
+        ],
+        "invokeTimer": {
+          "delay": null,
+          "isScheduled": true,
+          "scheduledCron": "0 0 2 * * *"
+        }
+      },
+      {
+        "applicationId": 1,
+        "branch": "main",
+        "testTag": "integration",
+        "testStage": "test",
+        "description": "Integration tests with delay (takes precedence over schedule)",
+        "squashStepIds": [4, 5],
+        "testData": [
+          {
+            "API_ENDPOINT": "https://api.staging.example.com",
+            "API_KEY": "staging-api-key"
+          }
+        ],
+        "invokeTimer": {
+          "delay": {
+            "timeUnit": "hours",
+            "value": "+2"
+          },
+          "isScheduled": true,
+          "scheduledCron": "0 30 14 * * *"
+        }
+      }
+    ],
+    "squashTestCaseId": 12345
+  }'
+```
+
+#### InvokeTimer Configuration Options
+
+The `invokeTimer` object provides advanced timing control for flow step execution:
+
+**Field Structure:**
+```json
+{
+  "invokeTimer": {
+    "delay": {
+      "timeUnit": "minutes|hours|days",
+      "value": "+<number>"
+    },
+    "isScheduled": true|false,
+    "scheduledCron": "cron_expression"
+  }
+}
+```
+
+**Field Details:**
+
+- **`delay`** (optional): Introduces a configurable delay before step execution
+  - `timeUnit`: Supports `"minutes"`, `"hours"`, or `"days"`
+  - `value`: Positive number with `"+"` prefix (e.g., `"+10"`, `"+2"`, `"+1"`)
+
+- **`isScheduled`** (optional): Boolean flag for cron-based scheduling
+  - When `true`, step waits for cron expression to be satisfied
+
+- **`scheduledCron`** (optional): Standard cron expression
+  - Format: `second minute hour day month dayOfWeek`
+  - Example: `"0 0 2 * * *"` (every day at 2:00 AM)
+
+**Precedence Rules:**
+- When both `delay` and `isScheduled=true` are specified, **delay takes precedence**
+- All timer fields are optional for backward compatibility
+
+#### Timer Configuration Examples
+
+**1. Delay-Based Execution:**
+```json
+{
+  "invokeTimer": {
+    "delay": {
+      "timeUnit": "minutes",
+      "value": "+15"
+    },
+    "isScheduled": false
+  }
+}
+```
+
+**2. Cron-Based Scheduling:**
+```json
+{
+  "invokeTimer": {
+    "delay": null,
+    "isScheduled": true,
+    "scheduledCron": "0 0 2 * * *"
+  }
+}
+```
+
+**3. Both Configured (Delay Wins):**
+```json
+{
+  "invokeTimer": {
+    "delay": {
+      "timeUnit": "hours",
+      "value": "+1"
+    },
+    "isScheduled": true,
+    "scheduledCron": "0 30 14 * * *"
+  }
+}
+```
+
+#### Common Timer Use Cases
+
+| Use Case | Configuration | Description |
+|----------|---------------|-------------|
+| **Quick Delay** | `timeUnit: "minutes", value: "+5"` | 5-minute delay between steps |
+| **Hourly Gap** | `timeUnit: "hours", value: "+1"` | 1-hour delay for system cooldown |
+| **Daily Tests** | `scheduledCron: "0 0 2 * * *"` | Daily execution at 2 AM |
+| **Weekly Reports** | `scheduledCron: "0 0 9 * * MON"` | Every Monday at 9 AM |
+| **Monthly Cleanup** | `scheduledCron: "0 0 1 1 * *"` | First day of each month |
+
+#### Supported Time Units & Values
+
+| Time Unit | Example Values | Description |
+|-----------|----------------|-------------|
+| `minutes` | `"+5"`, `"+30"`, `"+45"` | Minutes delay |
+| `hours` | `"+1"`, `"+6"`, `"+24"` | Hours delay |
+| `days` | `"+1"`, `"+7"`, `"+30"` | Days delay |
+
+#### Common Cron Expressions
+
+| Expression | Description |
+|------------|-------------|
+| `"0 0 2 * * *"` | Every day at 2:00 AM |
+| `"0 30 14 * * MON"` | Every Monday at 2:30 PM |
+| `"0 0 0 1 * *"` | First day of every month |
+| `"0 */15 * * * *"` | Every 15 minutes |
+| `"0 0 9-17 * * MON-FRI"` | Business hours (9 AM - 5 PM, Mon-Fri) |
+
+#### Benefits of Enhanced API
+
+✅ **Single API Call**: Create complete flows without managing individual components  
+✅ **Embedded Test Data**: Define test data inline without separate API calls  
+✅ **Advanced Timing**: Schedule and delay execution with InvokeTimer  
+✅ **Better Organization**: Keep related flow steps and data together  
+✅ **Atomic Operations**: All-or-nothing creation ensures consistency  
+✅ **Easier Maintenance**: Update flows as complete units  
+
 #### Step 6: Execute Your Flow
 
 ```bash
@@ -641,6 +835,18 @@ test:
 **Problem:** Step fails immediately
 - **Solution:** Check application configuration and GitLab connectivity
 
+**Problem:** InvokeTimer delay not working
+- **Solution:** Check that delay value has "+" prefix (e.g., "+10") and timeUnit is valid (minutes/hours/days)
+
+**Problem:** Scheduled cron expression not triggering
+- **Solution:** Verify cron expression format (second minute hour day month dayOfWeek) and ensure isScheduled=true
+
+**Problem:** Both delay and schedule configured but only delay works
+- **Solution:** This is expected behavior - delay takes precedence over scheduled cron when both are specified
+
+**Problem:** Invalid timer configuration validation errors
+- **Solution:** Ensure timeUnit is one of: "minutes", "hours", "days" and value follows "+<number>" format
+
 ### Best Practices for Beginners
 
 1. **Start Simple:** Begin with one Flow Step, then add more
@@ -649,6 +855,19 @@ test:
 4. **Monitor Logs:** Check application logs for detailed error messages
 5. **Version Control:** Keep your Flow configurations in version control
 6. **Documentation:** Document your test tags and expected variables
+
+### Best Practices for InvokeTimer
+
+1. **Test Timer Logic:** Start with short delays (e.g., "+1" minute) for testing
+2. **Use Appropriate Units:** Choose the right time unit for your use case:
+   - `minutes`: For short delays and testing
+   - `hours`: For system cooldown periods
+   - `days`: For daily/weekly scheduled runs
+3. **Validate Cron Expressions:** Use online cron validators to test your expressions
+4. **Consider Time Zones:** Cron expressions run in server time zone
+5. **Document Timing:** Clearly document why specific delays or schedules are needed
+6. **Monitor Scheduled Jobs:** Keep track of scheduled flows to avoid conflicts
+7. **Use Enhanced API:** Prefer the enhanced flow creation API for new flows with timing requirements
 
 ## 🔧 Configuration
 
@@ -737,6 +956,18 @@ export API_ENDPOINT=https://api.example.com
 2. **Global Variables**: From Flow.globalVariables  
 3. **Runtime Variables**: Parsed from each pipeline's output.env
 4. **Merged Variables**: Passed to subsequent pipeline steps
+
+### Database Schema
+
+The application automatically manages database schema changes through Hibernate. Recent additions include:
+
+#### InvokeTimer Fields (flow_steps table)
+- `delay_time_unit` (VARCHAR): Time unit for delays (minutes/hours/days)
+- `delay_value` (VARCHAR): Delay value with + prefix
+- `is_scheduled` (BOOLEAN): Flag for cron-based scheduling
+- `scheduled_cron` (VARCHAR): Cron expression for scheduling
+
+**Note**: With `hibernate.ddl-auto: update`, these fields are automatically added when you start the application.
 
 ## 🧪 Testing
 

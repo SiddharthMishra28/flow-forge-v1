@@ -1,5 +1,6 @@
 package com.testautomation.orchestrator.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -36,6 +37,10 @@ public class CombinedFlowStepDto {
     @Schema(description = "Test data as a list of key-value maps")
     private List<Map<String, String>> testData;
     
+    @Valid
+    @Schema(description = "Timer configuration for scheduling or delaying step execution")
+    private InvokeTimerDto invokeTimer;
+    
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
     
@@ -46,7 +51,7 @@ public class CombinedFlowStepDto {
     public CombinedFlowStepDto() {}
 
     public CombinedFlowStepDto(Long applicationId, String branch, String testTag, String testStage, String description,
-                              List<Long> squashStepIds, List<Map<String, String>> testData) {
+                              List<Long> squashStepIds, List<Map<String, String>> testData, InvokeTimerDto invokeTimer) {
         this.applicationId = applicationId;
         this.branch = branch;
         this.testTag = testTag;
@@ -54,6 +59,7 @@ public class CombinedFlowStepDto {
         this.description = description;
         this.squashStepIds = squashStepIds;
         this.testData = testData;
+        this.invokeTimer = invokeTimer;
     }
 
     // Getters and Setters
@@ -119,6 +125,14 @@ public class CombinedFlowStepDto {
 
     public void setTestData(List<Map<String, String>> testData) {
         this.testData = testData;
+    }
+
+    public InvokeTimerDto getInvokeTimer() {
+        return invokeTimer;
+    }
+
+    public void setInvokeTimer(InvokeTimerDto invokeTimer) {
+        this.invokeTimer = invokeTimer;
     }
 
     public LocalDateTime getCreatedAt() {
