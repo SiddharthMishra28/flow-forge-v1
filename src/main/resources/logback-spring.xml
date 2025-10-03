@@ -16,29 +16,25 @@
         </encoder>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>logs/pipeline-orchestrator.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
-            <maxFileSize>100MB</maxFileSize>
-            <maxHistory>30</maxHistory>
-            <totalSizeCap>3GB</totalSizeCap>
+            <maxFileSize>5MB</maxFileSize>
+            <maxHistory>5</maxHistory>
+            <totalSizeCap>30MB</totalSizeCap>
         </rollingPolicy>
     </appender>
-    
+
     <!-- Custom appender for flow execution logs that sends to WebSocket -->
-    <appender name="FLOW_EXECUTION_WEBSOCKET" class="com.testautomation.orchestrator.logging.FlowExecutionLogAppender">
-        <!-- This appender will be auto-configured by Spring -->
-    </appender>
+    <appender name="FLOW_EXECUTION_WEBSOCKET" class="com.testautomation.orchestrator.logging.FlowExecutionLogAppender"/>
     
     <!-- Root logger -->
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
-        <appender-ref ref="FLOW_EXECUTION_WEBSOCKET"/>
     </root>
     
     <!-- Specific logger configurations -->
     <logger name="com.testautomation.orchestrator" level="DEBUG" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
-        <appender-ref ref="FLOW_EXECUTION_WEBSOCKET"/>
     </logger>
     
     <!-- Flow execution specific logger -->
@@ -52,7 +48,6 @@
     <logger name="com.testautomation.orchestrator.service.PipelineExecutionService" level="DEBUG" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
-        <appender-ref ref="FLOW_EXECUTION_WEBSOCKET"/>
     </logger>
     
     <!-- Reduce noise from Spring and other frameworks -->

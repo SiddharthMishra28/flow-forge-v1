@@ -13,10 +13,23 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Void> handleNoResourceFoundException(NoResourceFoundException ex) {
+        if (ex.getMessage().contains(".well-known/appspecific/com.chrome.devtools.json")) {
+            // This is a common request from Chrome DevTools, not a real error.
+            return ResponseEntity.notFound().build();
+        } else {
+            logger.warn("Static resource not found: {}", ex.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
 
     @ExceptionHandler(GitLabValidationException.class)
     public ResponseEntity<ErrorResponse> handleGitLabValidationException(GitLabValidationException ex) {

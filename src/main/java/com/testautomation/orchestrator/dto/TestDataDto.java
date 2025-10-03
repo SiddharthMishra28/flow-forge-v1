@@ -11,6 +11,14 @@ public class TestDataDto {
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Auto-generated unique identifier")
     private Long dataId;
 
+    @NotNull(message = "Application ID is required")
+    private Long applicationId;
+
+    @NotNull(message = "Category is required")
+    private String category;
+
+    private String description;
+
     @NotNull(message = "Test data is required")
     private Map<String, String> testData;
 
@@ -23,7 +31,10 @@ public class TestDataDto {
     // Constructors
     public TestDataDto() {}
 
-    public TestDataDto(Map<String, String> testData) {
+    public TestDataDto(Long applicationId, String category, String description, Map<String, String> testData) {
+        this.applicationId = applicationId;
+        this.category = category;
+        this.description = description;
         this.testData = testData;
     }
 
@@ -34,6 +45,30 @@ public class TestDataDto {
 
     public void setDataId(Long dataId) {
         this.dataId = dataId;
+    }
+
+    public Long getApplicationId() {
+        return applicationId;
+    }
+
+    public void setApplicationId(Long applicationId) {
+        this.applicationId = applicationId;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public Map<String, String> getTestData() {

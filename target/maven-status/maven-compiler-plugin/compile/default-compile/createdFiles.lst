@@ -1,5 +1,4 @@
 com\testautomation\orchestrator\config\OpenApiConfig.class
-com\testautomation\orchestrator\controller\FlowLogController.class
 com\testautomation\orchestrator\service\PipelineExecutionService.class
 com\testautomation\orchestrator\service\CombinedFlowStepService.class
 com\testautomation\orchestrator\controller\FlowExecutionController.class
@@ -19,6 +18,7 @@ com\testautomation\orchestrator\util\GitLabApiClient$GitLabProjectResponse.class
 com\testautomation\orchestrator\controller\PipelineExecutionController.class
 com\testautomation\orchestrator\repository\FlowStepRepository.class
 com\testautomation\orchestrator\util\OutputEnvParser.class
+com\testautomation\orchestrator\config\CorsConfig.class
 com\testautomation\orchestrator\dto\InvokeTimerDto.class
 com\testautomation\orchestrator\model\InvokeTimer.class
 com\testautomation\orchestrator\model\Flow.class
@@ -32,7 +32,6 @@ com\testautomation\orchestrator\enums\TokenStatus.class
 com\testautomation\orchestrator\dto\DelayDto.class
 com\testautomation\orchestrator\config\AsyncConfig.class
 com\testautomation\orchestrator\service\TokenValidationScheduler.class
-com\testautomation\orchestrator\service\FlowExecutionLoggingService.class
 com\testautomation\orchestrator\dto\FlowExecutionDto.class
 com\testautomation\orchestrator\dto\analytics\ExecutionStatsDto.class
 com\testautomation\orchestrator\model\TestData.class

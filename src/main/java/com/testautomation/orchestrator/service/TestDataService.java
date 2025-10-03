@@ -2,10 +2,13 @@ package com.testautomation.orchestrator.service;
 
 import com.testautomation.orchestrator.dto.TestDataDto;
 import com.testautomation.orchestrator.model.TestData;
+import com.testautomation.orchestrator.repository.ApplicationRepository;
 import com.testautomation.orchestrator.repository.TestDataRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -19,8 +22,17 @@ public class TestDataService {
     @Autowired
     private TestDataRepository testDataRepository;
 
+    @Autowired
+    private ApplicationRepository applicationRepository;
+
     public TestDataDto createTestData(TestDataDto testDataDto) {
+        if (testDataDto.getApplicationId() == null || !applicationRepository.existsById(testDataDto.getApplicationId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or missing applicationId");
+        }
         TestData testData = new TestData();
+        testData.setApplicationId(testDataDto.getApplicationId());
+        testData.setCategory(testDataDto.getCategory());
+        testData.setDescription(testDataDto.getDescription());
         testData.setTestData(testDataDto.getTestData());
         
         TestData savedTestData = testDataRepository.save(testData);
@@ -29,7 +41,7 @@ public class TestDataService {
 
     public TestDataDto getTestDataById(Long dataId) {
         TestData testData = testDataRepository.findById(dataId)
-                .orElseThrow(() -> new RuntimeException("TestData not found with id: " + dataId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TestData not found with id: " + dataId));
         return convertToDto(testData);
     }
 
@@ -41,7 +53,22 @@ public class TestDataService {
 
     public TestDataDto updateTestData(Long dataId, TestDataDto testDataDto) {
         TestData testData = testDataRepository.findById(dataId)
-                .orElseThrow(() -> new RuntimeException("TestData not found with id: " + dataId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TestData not found with id: " + dataId));
+        
+        if (testDataDto.getApplicationId() != null) {
+            if (!applicationRepository.existsById(testDataDto.getApplicationId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid applicationId");
+            }
+            testData.setApplicationId(testDataDto.getApplicationId());
+        }
+
+        if (testDataDto.getCategory() != null) {
+            testData.setCategory(testDataDto.getCategory());
+        }
+
+        if (testDataDto.getDescription() != null) {
+            testData.setDescription(testDataDto.getDescription());
+        }
         
         testData.setTestData(testDataDto.getTestData());
         TestData updatedTestData = testDataRepository.save(testData);
@@ -50,7 +77,7 @@ public class TestDataService {
 
     public void deleteTestData(Long dataId) {
         if (!testDataRepository.existsById(dataId)) {
-            throw new RuntimeException("TestData not found with id: " + dataId);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TestData not found with id: " + dataId);
         }
         testDataRepository.deleteById(dataId);
     }
@@ -79,6 +106,9 @@ public class TestDataService {
     private TestDataDto convertToDto(TestData testData) {
         TestDataDto dto = new TestDataDto();
         dto.setDataId(testData.getDataId());
+        dto.setApplicationId(testData.getApplicationId());
+        dto.setCategory(testData.getCategory());
+        dto.setDescription(testData.getDescription());
         dto.setTestData(testData.getTestData());
         dto.setCreatedAt(testData.getCreatedAt());
         dto.setUpdatedAt(testData.getUpdatedAt());

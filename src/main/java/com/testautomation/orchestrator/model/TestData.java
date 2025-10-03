@@ -19,6 +19,15 @@ public class TestData {
     @Column(name = "data_id")
     private Long dataId;
 
+    @Column(name = "application_id")
+    private Long applicationId;
+
+    @NotNull
+    @Column(nullable = false)
+    private String category;
+
+    private String description;
+
     @NotNull
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "test_data", columnDefinition = "json", nullable = false)
@@ -35,7 +44,10 @@ public class TestData {
     // Constructors
     public TestData() {}
 
-    public TestData(Map<String, String> testData) {
+    public TestData(Long applicationId, String category, String description, Map<String, String> testData) {
+        this.applicationId = applicationId;
+        this.category = category;
+        this.description = description;
         this.testData = testData;
     }
 
@@ -46,6 +58,30 @@ public class TestData {
 
     public void setDataId(Long dataId) {
         this.dataId = dataId;
+    }
+
+    public Long getApplicationId() {
+        return applicationId;
+    }
+
+    public void setApplicationId(Long applicationId) {
+        this.applicationId = applicationId;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public Map<String, String> getTestData() {

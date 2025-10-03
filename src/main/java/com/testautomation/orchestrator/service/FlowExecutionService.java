@@ -54,8 +54,6 @@ public class FlowExecutionService {
     @Autowired
     private com.testautomation.orchestrator.config.GitLabConfig gitLabConfig;
 
-    @Autowired
-    private FlowExecutionLoggingService loggingService;
 
     public FlowExecutionDto createFlowExecution(Long flowId) {
         logger.info("Creating flow execution for flow ID: {}", flowId);
@@ -74,88 +72,84 @@ public class FlowExecutionService {
     @Async("flowExecutionTaskExecutor")
     public CompletableFuture<FlowExecutionDto> executeFlowAsync(UUID flowExecutionId) {
         logger.info("Starting async execution of flow execution ID: {}", flowExecutionId);
-        
+
         // Set up logging context manually
         org.slf4j.MDC.put("flowExecutionId", flowExecutionId.toString());
-        loggingService.sendLogMessage(flowExecutionId, "Flow execution started - logging context initialized");
-        
+
+        FlowExecution flowExecution = null;
         try {
-            FlowExecution flowExecution = flowExecutionRepository.findById(flowExecutionId)
+            flowExecution = flowExecutionRepository.findById(flowExecutionId)
                     .orElseThrow(() -> new IllegalArgumentException("Flow execution not found with ID: " + flowExecutionId));
-            
+
             final Long flowId = flowExecution.getFlowId();
             Flow flow = flowRepository.findById(flowId)
                     .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
-            
-            try {
+
             // Execute steps sequentially
             Map<String, String> accumulatedRuntimeVariables = new HashMap<>();
-            
+
             for (int i = 0; i < flow.getFlowStepIds().size(); i++) {
                 Long stepId = flow.getFlowStepIds().get(i);
                 FlowStep step = flowStepRepository.findById(stepId)
                         .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
-                
+
                 Application application = applicationRepository.findById(step.getApplicationId())
                         .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + step.getApplicationId()));
-                
+
                 // Prepare variables for this pipeline: FlowStep TestData + Accumulated Runtime
                 Map<String, String> pipelineVariables = new HashMap<>();
-                
+
                 // 1. Start with merged test data from TestData table
                 Map<String, String> stepTestData = testDataService.mergeTestDataByIds(step.getTestDataIds());
                 pipelineVariables.putAll(stepTestData);
-                
+
                 // 2. Add accumulated runtime variables from previous steps (can override test data)
                 pipelineVariables.putAll(accumulatedRuntimeVariables);
-                
+
                 logger.debug("Pipeline variables for step {}: {}", stepId, pipelineVariables);
-                
+
                 // Execute pipeline step
                 PipelineExecution pipelineExecution = executePipelineStep(flowExecution, step, application, pipelineVariables);
-                
+
                 if (pipelineExecution.getStatus() == ExecutionStatus.FAILED) {
                     // Mark flow as failed and stop execution
                     flowExecution.setStatus(ExecutionStatus.FAILED);
                     flowExecution.setEndTime(LocalDateTime.now());
                     flowExecution.setRuntimeVariables(accumulatedRuntimeVariables);
                     flowExecutionRepository.save(flowExecution);
-                    
+
                     logger.error("Flow execution failed at step: {}", stepId);
                     return CompletableFuture.completedFuture(convertToDto(flowExecution));
                 }
-                
+
                 // Accumulate runtime variables from this step for next steps
                 if (pipelineExecution.getRuntimeTestData() != null) {
                     accumulatedRuntimeVariables.putAll(pipelineExecution.getRuntimeTestData());
                     logger.debug("Accumulated runtime variables after step {}: {}", stepId, accumulatedRuntimeVariables);
                 }
             }
-            
+
             // Mark flow as successful
             flowExecution.setStatus(ExecutionStatus.PASSED);
             flowExecution.setEndTime(LocalDateTime.now());
             flowExecution.setRuntimeVariables(accumulatedRuntimeVariables);
             flowExecution = flowExecutionRepository.save(flowExecution);
-            
+
             logger.info("Flow execution completed successfully: {}", flowExecution.getId());
-            
-        } catch (Exception e) {
-            logger.error("Flow execution failed with exception: {}", e.getMessage(), e);
-            
-            flowExecution.setStatus(ExecutionStatus.FAILED);
-            flowExecution.setEndTime(LocalDateTime.now());
-            flowExecution = flowExecutionRepository.save(flowExecution);
-        }
-        
-            loggingService.sendLogMessage(flowExecutionId, "Flow execution completed");
+
             return CompletableFuture.completedFuture(convertToDto(flowExecution));
         } catch (Exception e) {
-            loggingService.sendLogMessage(flowExecutionId, "Flow execution failed: " + e.getMessage());
-            throw e;
+            logger.error("Flow execution failed with exception: {}", e.getMessage(), e);
+
+            if (flowExecution != null) {
+                flowExecution.setStatus(ExecutionStatus.FAILED);
+                flowExecution.setEndTime(LocalDateTime.now());
+                flowExecutionRepository.save(flowExecution);
+            }
+            // Propagate exception so that the CompletableFuture completes exceptionally
+            throw new RuntimeException(e);
         } finally {
             org.slf4j.MDC.remove("flowExecutionId");
-            loggingService.sendLogMessage(flowExecutionId, "Flow execution logging context closed");
         }
     }
 
@@ -191,89 +185,85 @@ public class FlowExecutionService {
     @Async("flowExecutionTaskExecutor")
     public CompletableFuture<FlowExecutionDto> executeReplayFlowAsync(UUID replayFlowExecutionId, UUID originalFlowExecutionId, Long failedFlowStepId) {
         logger.info("Starting async replay execution of flow execution ID: {} from step: {}", replayFlowExecutionId, failedFlowStepId);
-        
+
         // Set up logging context manually
         org.slf4j.MDC.put("flowExecutionId", replayFlowExecutionId.toString());
-        loggingService.sendLogMessage(replayFlowExecutionId, "Replay flow execution started - logging context initialized");
-        
+
+        FlowExecution replayExecution = null;
         try {
-            FlowExecution replayExecution = flowExecutionRepository.findById(replayFlowExecutionId)
+            replayExecution = flowExecutionRepository.findById(replayFlowExecutionId)
                     .orElseThrow(() -> new IllegalArgumentException("Replay flow execution not found with ID: " + replayFlowExecutionId));
-            
+
             final Long flowId = replayExecution.getFlowId();
             Flow flow = flowRepository.findById(flowId)
                     .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
-            
-            try {
+
             // Start execution from the failed step onwards
             Map<String, String> accumulatedRuntimeVariables = new HashMap<>(replayExecution.getRuntimeVariables());
             int failedStepIndex = flow.getFlowStepIds().indexOf(failedFlowStepId);
-            
+
             for (int i = failedStepIndex; i < flow.getFlowStepIds().size(); i++) {
                 Long stepId = flow.getFlowStepIds().get(i);
                 FlowStep step = flowStepRepository.findById(stepId)
                         .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
-                
+
                 Application application = applicationRepository.findById(step.getApplicationId())
                         .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + step.getApplicationId()));
-                
+
                 // Prepare variables for this pipeline: FlowStep TestData + Accumulated Runtime
                 Map<String, String> pipelineVariables = new HashMap<>();
-                
+
                 // 1. Start with merged test data from TestData table
                 Map<String, String> stepTestData = testDataService.mergeTestDataByIds(step.getTestDataIds());
                 pipelineVariables.putAll(stepTestData);
-                
+
                 // 2. Add accumulated runtime variables from previous steps (can override test data)
                 pipelineVariables.putAll(accumulatedRuntimeVariables);
-                
+
                 logger.debug("Replay pipeline variables for step {}: {}", stepId, pipelineVariables);
-                
+
                 // Execute pipeline step with replay flag
                 PipelineExecution pipelineExecution = executeReplayPipelineStep(replayExecution, step, application, pipelineVariables, originalFlowExecutionId);
-                
+
                 if (pipelineExecution.getStatus() == ExecutionStatus.FAILED) {
                     // Mark replay flow as failed and stop execution
                     replayExecution.setStatus(ExecutionStatus.FAILED);
                     replayExecution.setEndTime(LocalDateTime.now());
                     replayExecution.setRuntimeVariables(accumulatedRuntimeVariables);
                     flowExecutionRepository.save(replayExecution);
-                    
+
                     logger.error("Replay flow execution failed at step: {}", stepId);
                     return CompletableFuture.completedFuture(convertToDto(replayExecution));
                 }
-                
+
                 // Accumulate runtime variables from this step for next steps
                 if (pipelineExecution.getRuntimeTestData() != null) {
                     accumulatedRuntimeVariables.putAll(pipelineExecution.getRuntimeTestData());
                     logger.debug("Accumulated runtime variables after replay step {}: {}", stepId, accumulatedRuntimeVariables);
                 }
             }
-            
+
             // Mark replay flow as successful
             replayExecution.setStatus(ExecutionStatus.PASSED);
             replayExecution.setEndTime(LocalDateTime.now());
             replayExecution.setRuntimeVariables(accumulatedRuntimeVariables);
             replayExecution = flowExecutionRepository.save(replayExecution);
-            
+
             logger.info("Replay flow execution completed successfully: {}", replayExecution.getId());
-            
-        } catch (Exception e) {
-            logger.error("Replay flow execution failed with exception: {}", e.getMessage(), e);
-            
-            replayExecution.setStatus(ExecutionStatus.FAILED);
-            replayExecution.setEndTime(LocalDateTime.now());
-            replayExecution = flowExecutionRepository.save(replayExecution);
-        }
-        
-            loggingService.sendLogMessage(replayFlowExecutionId, "Replay flow execution completed");
+
             return CompletableFuture.completedFuture(convertToDto(replayExecution));
         } catch (Exception e) {
-            loggingService.sendLogMessage(replayFlowExecutionId, "Replay flow execution failed: " + e.getMessage());
-            throw e;
+            logger.error("Replay flow execution failed with exception: {}", e.getMessage(), e);
+
+            if (replayExecution != null) {
+                replayExecution.setStatus(ExecutionStatus.FAILED);
+                replayExecution.setEndTime(LocalDateTime.now());
+                flowExecutionRepository.save(replayExecution);
+            }
+            // Propagate exception so that the CompletableFuture completes exceptionally
+            throw new RuntimeException(e);
         } finally {
             org.slf4j.MDC.remove("flowExecutionId");
-            loggingService.sendLogMessage(replayFlowExecutionId, "Replay flow execution logging context closed");
         }
     }
 

@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 public class CombinedFlowStepDto {
 
@@ -34,8 +33,9 @@ public class CombinedFlowStepDto {
 
     private List<Long> squashStepIds;
     
-    @Schema(description = "Test data as a list of key-value maps")
-    private List<Map<String, String>> testData;
+    @Valid
+    @Schema(description = "List of test data objects")
+    private List<TestDataDto> testData;
     
     @Valid
     @Schema(description = "Timer configuration for scheduling or delaying step execution")
@@ -51,7 +51,7 @@ public class CombinedFlowStepDto {
     public CombinedFlowStepDto() {}
 
     public CombinedFlowStepDto(Long applicationId, String branch, String testTag, String testStage, String description,
-                              List<Long> squashStepIds, List<Map<String, String>> testData, InvokeTimerDto invokeTimer) {
+                              List<Long> squashStepIds, List<TestDataDto> testData, InvokeTimerDto invokeTimer) {
         this.applicationId = applicationId;
         this.branch = branch;
         this.testTag = testTag;
@@ -119,11 +119,11 @@ public class CombinedFlowStepDto {
         this.squashStepIds = squashStepIds;
     }
 
-    public List<Map<String, String>> getTestData() {
+    public List<TestDataDto> getTestData() {
         return testData;
     }
 
-    public void setTestData(List<Map<String, String>> testData) {
+    public void setTestData(List<TestDataDto> testData) {
         this.testData = testData;
     }
 

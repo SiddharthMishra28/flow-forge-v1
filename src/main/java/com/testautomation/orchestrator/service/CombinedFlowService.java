@@ -9,7 +9,6 @@ import com.testautomation.orchestrator.model.Delay;
 import com.testautomation.orchestrator.model.Flow;
 import com.testautomation.orchestrator.model.FlowStep;
 import com.testautomation.orchestrator.model.InvokeTimer;
-import com.testautomation.orchestrator.model.TestData;
 import com.testautomation.orchestrator.repository.ApplicationRepository;
 import com.testautomation.orchestrator.repository.FlowRepository;
 import com.testautomation.orchestrator.repository.FlowStepRepository;
@@ -22,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -43,6 +41,9 @@ public class CombinedFlowService {
 
     @Autowired
     private ApplicationRepository applicationRepository;
+
+    @Autowired
+    private TestDataService testDataService;
 
     public CombinedFlowDto createCombinedFlow(CombinedFlowDto combinedFlowDto) {
         logger.info("Creating new combined flow with {} steps", combinedFlowDto.getFlowSteps().size());
@@ -201,20 +202,15 @@ public class CombinedFlowService {
         }
     }
 
-    private List<Long> createTestDataEntries(List<Map<String, String>> testDataList) {
-        if (testDataList == null || testDataList.isEmpty()) {
+    private List<Long> createTestDataEntries(List<TestDataDto> testDataDtoList) {
+        if (testDataDtoList == null || testDataDtoList.isEmpty()) {
             return new ArrayList<>();
         }
         
-        List<Long> testDataIds = new ArrayList<>();
-        for (Map<String, String> testDataMap : testDataList) {
-            TestData testData = new TestData();
-            testData.setTestData(testDataMap);
-            TestData savedTestData = testDataRepository.save(testData);
-            testDataIds.add(savedTestData.getDataId());
-        }
-        
-        return testDataIds;
+        return testDataDtoList.stream()
+                .map(testDataService::createTestData)
+                .map(TestDataDto::getDataId)
+                .collect(Collectors.toList());
     }
 
     private void deleteFlowStepsAndTestData(List<FlowStep> flowSteps) {
@@ -259,11 +255,10 @@ public class CombinedFlowService {
         
         // Get test data
         if (flowStep.getTestDataIds() != null && !flowStep.getTestDataIds().isEmpty()) {
-            List<TestData> testDataList = testDataRepository.findByDataIdIn(flowStep.getTestDataIds());
-            List<Map<String, String>> testDataMaps = testDataList.stream()
-                    .map(TestData::getTestData)
+            List<TestDataDto> testDataDtos = flowStep.getTestDataIds().stream()
+                    .map(testDataService::getTestDataById)
                     .collect(Collectors.toList());
-            dto.setTestData(testDataMaps);
+            dto.setTestData(testDataDtos);
         } else {
             dto.setTestData(new ArrayList<>());
         }
