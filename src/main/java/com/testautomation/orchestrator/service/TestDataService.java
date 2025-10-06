@@ -32,8 +32,7 @@ public class TestDataService {
         TestData testData = new TestData();
         testData.setApplicationId(testDataDto.getApplicationId());
         testData.setCategory(testDataDto.getCategory());
-        testData.setDescription(testDataDto.getDescription());
-        testData.setTestData(testDataDto.getTestData());
+        testData.setVariables(testDataDto.getVariables());
         
         TestData savedTestData = testDataRepository.save(testData);
         return convertToDto(savedTestData);
@@ -70,7 +69,7 @@ public class TestDataService {
             testData.setDescription(testDataDto.getDescription());
         }
         
-        testData.setTestData(testDataDto.getTestData());
+        testData.setVariables(testDataDto.getVariables());
         TestData updatedTestData = testDataRepository.save(testData);
         return convertToDto(updatedTestData);
     }
@@ -95,8 +94,8 @@ public class TestDataService {
         Map<String, String> mergedData = new HashMap<>();
         
         for (TestData testData : testDataList) {
-            if (testData.getTestData() != null) {
-                mergedData.putAll(testData.getTestData());
+            if (testData.getVariables() != null) {
+                mergedData.putAll(testData.getVariables());
             }
         }
         
@@ -109,7 +108,7 @@ public class TestDataService {
         dto.setApplicationId(testData.getApplicationId());
         dto.setCategory(testData.getCategory());
         dto.setDescription(testData.getDescription());
-        dto.setTestData(testData.getTestData());
+        dto.setVariables(testData.getVariables());
         dto.setCreatedAt(testData.getCreatedAt());
         dto.setUpdatedAt(testData.getUpdatedAt());
         return dto;

@@ -30,8 +30,8 @@ public class TestData {
 
     @NotNull
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "test_data", columnDefinition = "json", nullable = false)
-    private Map<String, String> testData;
+    @Column(name = "variables", columnDefinition = "json", nullable = false)
+    private Map<String, String> variables;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -44,11 +44,11 @@ public class TestData {
     // Constructors
     public TestData() {}
 
-    public TestData(Long applicationId, String category, String description, Map<String, String> testData) {
+    public TestData(Long applicationId, String category, String description, Map<String, String> variables) {
         this.applicationId = applicationId;
         this.category = category;
         this.description = description;
-        this.testData = testData;
+        this.variables = variables;
     }
 
     // Getters and Setters
@@ -84,12 +84,12 @@ public class TestData {
         this.description = description;
     }
 
-    public Map<String, String> getTestData() {
-        return testData;
+    public Map<String, String> getVariables() {
+        return variables;
     }
 
-    public void setTestData(Map<String, String> testData) {
-        this.testData = testData;
+    public void setVariables(Map<String, String> variables) {
+        this.variables = variables;
     }
 
     public LocalDateTime getCreatedAt() {

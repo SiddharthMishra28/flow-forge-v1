@@ -1,6 +1,7 @@
 com\testautomation\orchestrator\config\OpenApiConfig.class
 com\testautomation\orchestrator\service\PipelineExecutionService.class
 com\testautomation\orchestrator\service\CombinedFlowStepService.class
+com\testautomation\orchestrator\validator\ValidInvokeTimer.class
 com\testautomation\orchestrator\controller\FlowExecutionController.class
 com\testautomation\orchestrator\dto\PipelineExecutionDto.class
 com\testautomation\orchestrator\service\ApplicationService.class
@@ -51,6 +52,7 @@ com\testautomation\orchestrator\controller\FlowController.class
 com\testautomation\orchestrator\model\Application.class
 com\testautomation\orchestrator\model\PipelineExecution.class
 com\testautomation\orchestrator\repository\TestDataRepository.class
+com\testautomation\orchestrator\validator\InvokeTimerValidator.class
 com\testautomation\orchestrator\model\FlowStep.class
 com\testautomation\orchestrator\config\WebSocketConfig.class
 com\testautomation\orchestrator\repository\PipelineExecutionRepository.class

@@ -3,6 +3,7 @@ package com.testautomation.orchestrator.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import com.testautomation.orchestrator.validator.ValidInvokeTimer;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -38,6 +39,7 @@ public class CombinedFlowStepDto {
     private List<TestDataDto> testData;
     
     @Valid
+    @ValidInvokeTimer
     @Schema(description = "Timer configuration for scheduling or delaying step execution")
     private InvokeTimerDto invokeTimer;
     

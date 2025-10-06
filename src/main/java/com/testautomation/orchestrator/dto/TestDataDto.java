@@ -20,7 +20,7 @@ public class TestDataDto {
     private String description;
 
     @NotNull(message = "Test data is required")
-    private Map<String, String> testData;
+    private Map<String, String> variables;
 
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
@@ -31,11 +31,11 @@ public class TestDataDto {
     // Constructors
     public TestDataDto() {}
 
-    public TestDataDto(Long applicationId, String category, String description, Map<String, String> testData) {
+    public TestDataDto(Long applicationId, String category, String description, Map<String, String> variables) {
         this.applicationId = applicationId;
         this.category = category;
         this.description = description;
-        this.testData = testData;
+        this.variables = variables;
     }
 
     // Getters and Setters
@@ -71,12 +71,12 @@ public class TestDataDto {
         this.description = description;
     }
 
-    public Map<String, String> getTestData() {
-        return testData;
+    public Map<String, String> getVariables() {
+        return variables;
     }
 
-    public void setTestData(Map<String, String> testData) {
-        this.testData = testData;
+    public void setVariables(Map<String, String> variables) {
+        this.variables = variables;
     }
 
     public LocalDateTime getCreatedAt() {

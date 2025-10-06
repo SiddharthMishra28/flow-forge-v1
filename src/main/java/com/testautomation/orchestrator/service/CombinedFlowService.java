@@ -54,7 +54,6 @@ public class CombinedFlowService {
         // Create and save flow steps with test data
         List<Long> flowStepIds = new ArrayList<>();
         List<FlowStep> savedFlowSteps = new ArrayList<>();
-        
         for (CombinedFlowStepDto stepDto : combinedFlowDto.getFlowSteps()) {
             // Create test data entries first
             List<Long> testDataIds = createTestDataEntries(stepDto.getTestData());
@@ -272,14 +271,16 @@ public class CombinedFlowService {
         }
         
         InvokeTimer entity = new InvokeTimer();
-        entity.setIsScheduled(dto.getIsScheduled());
-        entity.setScheduledCron(dto.getScheduledCron());
-        
         if (dto.getDelay() != null) {
             Delay delay = new Delay();
             delay.setTimeUnit(dto.getDelay().getTimeUnit());
             delay.setValue(dto.getDelay().getValue());
             entity.setDelay(delay);
+            entity.setIsScheduled(null);
+            entity.setScheduledCron(null);
+        } else {
+            entity.setIsScheduled(dto.getIsScheduled());
+            entity.setScheduledCron(dto.getScheduledCron());
         }
         
         return entity;
