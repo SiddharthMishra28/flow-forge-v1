@@ -2,10 +2,8 @@ package com.testautomation.orchestrator.service;
 
 import com.testautomation.orchestrator.dto.CombinedFlowDto;
 import com.testautomation.orchestrator.dto.CombinedFlowStepDto;
-import com.testautomation.orchestrator.dto.DelayDto;
 import com.testautomation.orchestrator.dto.InvokeTimerDto;
 import com.testautomation.orchestrator.dto.TestDataDto;
-import com.testautomation.orchestrator.model.Delay;
 import com.testautomation.orchestrator.model.Flow;
 import com.testautomation.orchestrator.model.FlowStep;
 import com.testautomation.orchestrator.model.InvokeTimer;
@@ -78,6 +76,7 @@ public class CombinedFlowService {
         Flow flow = new Flow();
         flow.setFlowStepIds(flowStepIds);
         flow.setSquashTestCaseId(combinedFlowDto.getSquashTestCaseId());
+        flow.setSquashTestCase(combinedFlowDto.getSquashTestCase());
         
         Flow savedFlow = flowRepository.save(flow);
         
@@ -166,6 +165,7 @@ public class CombinedFlowService {
         // Update flow
         existingFlow.setFlowStepIds(newFlowStepIds);
         existingFlow.setSquashTestCaseId(combinedFlowDto.getSquashTestCaseId());
+        existingFlow.setSquashTestCase(combinedFlowDto.getSquashTestCase());
         
         Flow updatedFlow = flowRepository.save(existingFlow);
         
@@ -227,6 +227,7 @@ public class CombinedFlowService {
         CombinedFlowDto dto = new CombinedFlowDto();
         dto.setId(flow.getId());
         dto.setSquashTestCaseId(flow.getSquashTestCaseId());
+        dto.setSquashTestCase(flow.getSquashTestCase());
         dto.setCreatedAt(flow.getCreatedAt());
         dto.setUpdatedAt(flow.getUpdatedAt());
         
@@ -271,17 +272,9 @@ public class CombinedFlowService {
         }
         
         InvokeTimer entity = new InvokeTimer();
-        if (dto.getDelay() != null) {
-            Delay delay = new Delay();
-            delay.setTimeUnit(dto.getDelay().getTimeUnit());
-            delay.setValue(dto.getDelay().getValue());
-            entity.setDelay(delay);
-            entity.setIsScheduled(null);
-            entity.setScheduledCron(null);
-        } else {
-            entity.setIsScheduled(dto.getIsScheduled());
-            entity.setScheduledCron(dto.getScheduledCron());
-        }
+        entity.setMinutes(dto.getMinutes());
+        entity.setHours(dto.getHours());
+        entity.setDays(dto.getDays());
         
         return entity;
     }
@@ -292,15 +285,9 @@ public class CombinedFlowService {
         }
         
         InvokeTimerDto dto = new InvokeTimerDto();
-        dto.setIsScheduled(entity.getIsScheduled());
-        dto.setScheduledCron(entity.getScheduledCron());
-        
-        if (entity.getDelay() != null) {
-            DelayDto delayDto = new DelayDto();
-            delayDto.setTimeUnit(entity.getDelay().getTimeUnit());
-            delayDto.setValue(entity.getDelay().getValue());
-            dto.setDelay(delayDto);
-        }
+        dto.setMinutes(entity.getMinutes());
+        dto.setHours(entity.getHours());
+        dto.setDays(entity.getDays());
         
         return dto;
     }

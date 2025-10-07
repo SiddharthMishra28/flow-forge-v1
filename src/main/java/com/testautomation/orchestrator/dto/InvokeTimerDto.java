@@ -1,55 +1,53 @@
 package com.testautomation.orchestrator.dto;
 
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public class InvokeTimerDto {
 
-    @Valid
-    @Schema(description = "Delay configuration for the flow step")
-    private DelayDto delay;
+    @Pattern(regexp = "^\\+\\d+$", message = "Minutes must be a positive number with '+' prefix (e.g., '+10')")
+    @Schema(description = "Minutes to wait before executing this step", example = "+10")
+    private String minutes;
 
-    @Schema(description = "Whether the step should be scheduled based on cron expression", example = "true")
-    private Boolean isScheduled;
+    @Pattern(regexp = "^\\+\\d+$", message = "Hours must be a positive number with '+' prefix (e.g., '+2')")
+    @Schema(description = "Hours to wait before executing this step", example = "+2")
+    private String hours;
 
-    @Pattern(regexp = "^[0-9*\\-,/\\s]+$", message = "Invalid cron expression format")
-    @Schema(description = "Cron expression for scheduling (used when isScheduled is true)", 
-            example = "0 0 2 * * *", 
-            pattern = "Standard cron format: second minute hour day month dayOfWeek")
-    private String scheduledCron;
+    @Pattern(regexp = "^\\+\\d+$", message = "Days must be a positive number with '+' prefix (e.g., '+1')")
+    @Schema(description = "Days to wait before executing this step", example = "+1")
+    private String days;
 
     // Constructors
     public InvokeTimerDto() {}
 
-    public InvokeTimerDto(DelayDto delay, Boolean isScheduled, String scheduledCron) {
-        this.delay = delay;
-        this.isScheduled = isScheduled;
-        this.scheduledCron = scheduledCron;
+    public InvokeTimerDto(String minutes, String hours, String days) {
+        this.minutes = minutes;
+        this.hours = hours;
+        this.days = days;
     }
 
     // Getters and Setters
-    public DelayDto getDelay() {
-        return delay;
+    public String getMinutes() {
+        return minutes;
     }
 
-    public void setDelay(DelayDto delay) {
-        this.delay = delay;
+    public void setMinutes(String minutes) {
+        this.minutes = minutes;
     }
 
-    public Boolean getIsScheduled() {
-        return isScheduled;
+    public String getHours() {
+        return hours;
     }
 
-    public void setIsScheduled(Boolean isScheduled) {
-        this.isScheduled = isScheduled;
+    public void setHours(String hours) {
+        this.hours = hours;
     }
 
-    public String getScheduledCron() {
-        return scheduledCron;
+    public String getDays() {
+        return days;
     }
 
-    public void setScheduledCron(String scheduledCron) {
-        this.scheduledCron = scheduledCron;
+    public void setDays(String days) {
+        this.days = days;
     }
 }

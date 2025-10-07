@@ -8,12 +8,13 @@
 - **Asynchronous Flow Execution**: Run complex test flows asynchronously, with support for sequential and parallel step execution.
 - **Dynamic Data Exchange**: Exchange data between pipeline steps at runtime by parsing and merging `output.env` files.
 - **Resilience and Recovery**: Easily replay or resume failed test flows from any specific step, with automatic data ingestion.
-- **Centralized Test Data Management**: Manage and version your test data alongside your applications, with support for categorization and descriptions.
-- **Simplified Flow Creation**: A single, intuitive API to define and create an entire E2E flow, including all its steps and associated test data.
+- **Centralized Test Data Management**: Manage and version your test data with application name mapping, categorization and descriptions.
+- **Simplified Flow Creation**: A single, intuitive API to define and create an entire E2E flow with squash test case integration, including all its steps and associated test data.
 - **Real-time Log Streaming**: Monitor your test executions in real-time with live log streaming directly in your browser via WebSockets.
 - **Comprehensive REST API**: A full-fledged REST API with detailed OpenAPI/Swagger documentation for easy integration and management.
 - **Flexible Database Support**: Out-of-the-box support for H2 (development) and PostgreSQL (production).
-- **Customizable Timer-Based Execution**: Schedule flows with cron expressions or introduce delays between steps.
+- **Smart Scheduling System**: Memory-optimized timer-based execution with configurable delays (days, hours, minutes) using database persistence.
+- **Automatic Failure Handling**: Flow execution stops immediately when any step fails, preventing resource waste on subsequent steps.
 
 ## 🏗️ System Architecture
 
@@ -22,22 +23,26 @@ FlowForge is built on a modular, scalable architecture designed for high perform
 ### Core Components
 
 1.  **Application**: Represents a GitLab project, including its access credentials (personal access token). This is the primary entity for which flows are defined.
-2.  **TestData**: A flexible key-value store for test data associated with an `Application`. Each `TestData` entity can be categorized for better organization (e.g., `API_CREDENTIALS`, `USER_PROFILES`).
-3.  **FlowStep**: An individual, executable step within a flow. It is linked to an `Application` and defines the GitLab pipeline branch, test tag, and test stage to be executed.
-4.  **Flow**: An ordered sequence of `FlowSteps` that represents a complete E2E test scenario.
-5.  **FlowExecution**: A runtime instance of a `Flow`, capturing its state (`RUNNING`, `PASSED`, `FAILED`), start/end times, and the aggregated runtime variables.
-6.  **PipelineExecution**: Represents the execution of a single GitLab pipeline within a `FlowExecution`, tracking its status and associated logs.
+2.  **TestData**: A flexible key-value store for test data associated with an `Application` and `applicationName`. Each `TestData` entity can be categorized for better organization (e.g., `API_CREDENTIALS`, `USER_PROFILES`).
+3.  **FlowStep**: An individual, executable step within a flow. It is linked to an `Application` and defines the GitLab pipeline branch, test tag, test stage, and optional timer configuration for delayed execution.
+4.  **Flow**: An ordered sequence of `FlowSteps` that represents a complete E2E test scenario with squash test case integration (`squashTestCaseId` and `squashTestCase`).
+5.  **FlowExecution**: A runtime instance of a `Flow`, capturing its state (`RUNNING`, `PASSED`, `FAILED`, `SCHEDULED`), start/end times, and the aggregated runtime variables.
+6.  **PipelineExecution**: Represents the execution of a single GitLab pipeline within a `FlowExecution`, tracking its status, scheduled resume time, and associated logs.
+7.  **SchedulingService**: Memory-optimized background service that manages delayed step executions using database persistence instead of active polling.
 
 ### Execution Workflow
 
 1.  A user triggers a `Flow` execution via the `/api/flows/{id}/execute` endpoint.
 2.  The `FlowExecutionService` creates a `FlowExecution` record and begins processing the `FlowSteps` sequentially.
-3.  For each `FlowStep`, the service merges the configured `TestData` to create a set of runtime variables.
-4.  The `GitLabApiClient` triggers the corresponding GitLab pipeline, passing the runtime variables as environment variables.
-5.  The application continuously polls the GitLab API to monitor the pipeline status.
-6.  If the pipeline generates an `output.env` file as an artifact, the system downloads, parses, and merges it into the `FlowExecution`'s runtime variables for subsequent steps to use.
-7.  Logs are streamed in real-time via WebSockets and can be viewed at `http://localhost:8080/logs.html`.
-8.  If a step fails, the flow execution is marked as `FAILED`, and the user can later trigger a replay.
+3.  For each `FlowStep`, the service merges the configured `TestData` (including `applicationName`) to create a set of runtime variables.
+4.  **Timer Check**: If the step has an `invokeTimer` configuration, the system calculates the resume time and schedules the step for later execution with `SCHEDULED` status.
+5.  **Immediate Execution**: For steps without timers, the `GitLabApiClient` triggers the corresponding GitLab pipeline, passing the runtime variables as environment variables.
+6.  The application continuously polls the GitLab API to monitor the pipeline status.
+7.  If the pipeline generates an `output.env` file as an artifact, the system downloads, parses, and merges it into the `FlowExecution`'s runtime variables for subsequent steps to use.
+8.  **Failure Handling**: If any step fails, the flow execution is immediately marked as `FAILED` and **all subsequent steps are skipped** to prevent resource waste.
+9.  **Scheduled Execution**: The `SchedulingService` background process checks every minute for `SCHEDULED` steps that are ready to resume and automatically triggers their execution.
+10. Logs are streamed in real-time via WebSockets and can be viewed at `http://localhost:8080/logs.html`.
+11. Failed flows can be replayed from the failed step using the replay endpoint, with all runtime variables from successful steps automatically restored.
 
 ## 💻 System Requirements
 
@@ -103,6 +108,7 @@ Now, let's create a complete flow with two steps. This single API call will defi
 ```json
 {
   "squashTestCaseId": 12345,
+  "squashTestCase": "Verify user login and dashboard functionality",
   "flowSteps": [
     {
       "applicationId": 1,
@@ -110,9 +116,11 @@ Now, let's create a complete flow with two steps. This single API call will defi
       "testTag": "login-tests",
       "testStage": "test",
       "description": "Login functionality tests",
+      "squashStepIds": [1, 2, 3],
       "testData": [
         {
           "applicationId": 1,
+          "applicationName": "AuthService",
           "category": "LOGIN_CREDENTIALS",
           "description": "Standard user credentials",
           "variables": {
@@ -120,20 +128,38 @@ Now, let's create a complete flow with two steps. This single API call will defi
             "PASSWORD": "testpass123"
           }
         }
-      ]
+      ],
+      "invokeTimer": null
     },
     {
-      "applicationId": 1,
+      "applicationId": 2,
       "branch": "main",
       "testTag": "dashboard-tests",
       "testStage": "test",
       "description": "Dashboard functionality tests",
-      "testData": []
+      "squashStepIds": [4, 5, 6],
+      "testData": [
+        {
+          "applicationId": 2,
+          "applicationName": "DashboardService",
+          "category": "UI_CONFIG",
+          "description": "Dashboard configuration data",
+          "variables": {
+            "THEME": "dark",
+            "REFRESH_RATE": "30"
+          }
+        }
+      ],
+      "invokeTimer": {
+        "minutes": "+10",
+        "hours": "+2",
+        "days": "+1"
+      }
     }
   ]
 }
 ```
-This creates a flow linked to Squash TM test case `12345` with two sequential steps. The first step includes inline test data for login.
+This creates a flow linked to Squash TM test case `12345` with two sequential steps. The first step executes immediately with inline test data for login, while the second step will wait for 1 day, 2 hours, and 10 minutes after the first step completes before executing.
 
 ### 5. Execute the Flow
 
@@ -189,12 +215,28 @@ Open the log streaming page in your browser to see live logs. Replace `{flowExec
 - `PUT /api/flow-steps/{id}`: Update a flow step.
 - `DELETE /api/flow-steps/{id}`: Delete a flow step.
 
+#### Flow Executions
+- `GET /api/flow-executions/{id}`: Get flow execution details.
+- `GET /api/flow-executions`: Get all flow executions.
+- `POST /api/flow-executions/{flowExecutionUUID}/replay/{failedFlowStepId}`: Replay a failed flow from a specific step.
+
+#### Pipeline Executions
+- `GET /api/pipeline-executions/{id}`: Get pipeline execution details.
+- `GET /api/pipeline-executions`: Get all pipeline executions.
+
+#### Analytics
+- `GET /api/analytics/execution-stats`: Get execution statistics.
+- `GET /api/analytics/duration-stats`: Get duration statistics.
+- `GET /api/analytics/failure-analysis`: Get failure analysis data.
+- `GET /api/analytics/trends`: Get trend data for executions.
+
 ### Schemas
 
 #### `CombinedFlowDto` (for `POST /api/flows`)
 ```json
 {
   "squashTestCaseId": 0,
+  "squashTestCase": "string",
   "flowSteps": [
     {
       "applicationId": 0,
@@ -206,6 +248,7 @@ Open the log streaming page in your browser to see live logs. Replace `{flowExec
       "testData": [
         {
           "applicationId": 0,
+          "applicationName": "string",
           "category": "string",
           "description": "string",
           "variables": {
@@ -215,12 +258,9 @@ Open the log streaming page in your browser to see live logs. Replace `{flowExec
         }
       ],
       "invokeTimer": {
-        "delay": {
-          "timeUnit": "minutes",
-          "value": "+10"
-        },
-        "isScheduled": true,
-        "scheduledCron": "0 0 2 * * *"
+        "minutes": "+10",
+        "hours": "+2",
+        "days": "+1"
       }
     }
   ]
@@ -231,6 +271,7 @@ Open the log streaming page in your browser to see live logs. Replace `{flowExec
 ```json
 {
   "applicationId": 0,
+  "applicationName": "string",
   "category": "string",
   "description": "string",
   "variables": {
@@ -239,6 +280,63 @@ Open the log streaming page in your browser to see live logs. Replace `{flowExec
   }
 }
 ```
+
+## ⏰ Smart Scheduling System
+
+FlowForge includes a sophisticated, memory-optimized scheduling system that allows you to introduce delays between flow steps without consuming system resources.
+
+### How It Works
+
+1. **Timer Configuration**: Define delays using the `invokeTimer` object with `minutes`, `hours`, and `days` fields (all with "+" prefix).
+2. **Database Persistence**: When a step needs to be delayed, the system calculates the resume time and stores it in the database with `SCHEDULED` status.
+3. **Background Processing**: A lightweight background service checks every minute for scheduled executions that are ready to resume.
+4. **Automatic Resumption**: When the scheduled time arrives, the execution automatically resumes from the next step.
+
+### Timer Format
+
+```json
+{
+  "invokeTimer": {
+    "minutes": "+10",  // Wait 10 additional minutes
+    "hours": "+2",     // Wait 2 additional hours  
+    "days": "+1"       // Wait 1 additional day
+  }
+}
+```
+
+- All fields are optional (at least one must be specified)
+- All values must have the "+" prefix to indicate they are added to the previous step's completion time
+- The total delay is calculated as: `previous_step_completion + days + hours + minutes`
+
+### Example Use Cases
+
+- **Batch Processing**: Wait overnight before running data validation steps
+- **Rate Limiting**: Introduce delays to avoid overwhelming external systems
+- **Business Logic**: Simulate real-world delays (e.g., waiting for payment processing)
+- **Load Testing**: Stagger test executions across different time periods
+
+## 🚨 Failure Handling
+
+FlowForge implements intelligent failure handling to prevent resource waste and ensure reliable test execution:
+
+### Automatic Flow Termination
+
+- When any flow step fails, the entire flow execution stops immediately
+- Subsequent steps are **NOT executed**, preventing wasted resources
+- The flow execution status is marked as `FAILED`
+- All accumulated runtime variables are preserved for replay functionality
+
+### Replay Functionality
+
+- Failed flows can be replayed from the failed step onwards
+- Runtime variables from successful steps are automatically restored
+- Use the replay endpoint: `POST /api/flow-executions/{flowExecutionUUID}/replay/{failedFlowStepId}`
+
+### Scheduled Step Failures
+
+- If a scheduled step fails to resume due to system errors, it's automatically marked as `FAILED`
+- The scheduling service includes error handling and logging for troubleshooting
+- Failed scheduled executions don't impact other scheduled steps
 
 ## 🤝 Contributing
 

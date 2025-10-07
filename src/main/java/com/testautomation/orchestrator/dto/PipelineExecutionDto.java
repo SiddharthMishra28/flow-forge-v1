@@ -22,6 +22,7 @@ public class PipelineExecutionDto {
     private LocalDateTime createdAt;
     private Boolean isReplay;
     private UUID originalFlowExecutionId;
+    private LocalDateTime resumeTime;
 
     // Constructors
     public PipelineExecutionDto() {}
@@ -144,5 +145,13 @@ public class PipelineExecutionDto {
 
     public void setOriginalFlowExecutionId(UUID originalFlowExecutionId) {
         this.originalFlowExecutionId = originalFlowExecutionId;
+    }
+
+    public LocalDateTime getResumeTime() {
+        return resumeTime;
+    }
+
+    public void setResumeTime(LocalDateTime resumeTime) {
+        this.resumeTime = resumeTime;
     }
 }

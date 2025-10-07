@@ -16,20 +16,15 @@ public class InvokeTimerValidator implements ConstraintValidator<ValidInvokeTime
             return true; // Null is valid
         }
 
-        boolean hasDelay = invokeTimerDto.getDelay() != null;
-        boolean hasScheduledCron = invokeTimerDto.getScheduledCron() != null && !invokeTimerDto.getScheduledCron().isBlank();
+        boolean hasMinutes = invokeTimerDto.getMinutes() != null && !invokeTimerDto.getMinutes().isBlank();
+        boolean hasHours = invokeTimerDto.getHours() != null && !invokeTimerDto.getHours().isBlank();
+        boolean hasDays = invokeTimerDto.getDays() != null && !invokeTimerDto.getDays().isBlank();
 
-        if (hasDelay && hasScheduledCron) {
+        // At least one time field must be specified
+        if (!hasMinutes && !hasHours && !hasDays) {
             context.disableDefaultConstraintViolation();
-            context.buildConstraintViolationWithTemplate("A FlowStep cannot be both delayed and scheduled with cron.")
-                   .addPropertyNode("delay").addConstraintViolation();
-            return false;
-        }
-
-        if (!hasDelay && !hasScheduledCron) {
-            context.disableDefaultConstraintViolation();
-            context.buildConstraintViolationWithTemplate("Either delay or scheduledCron must be populated when invokeTimer is provided.")
-                   .addPropertyNode("delay").addConstraintViolation();
+            context.buildConstraintViolationWithTemplate("At least one of minutes, hours, or days must be specified when invokeTimer is provided.")
+                   .addPropertyNode("minutes").addConstraintViolation();
             return false;
         }
 

@@ -65,6 +65,9 @@ public class PipelineExecution {
     @Column(name = "original_flow_execution_id")
     private UUID originalFlowExecutionId;
 
+    @Column(name = "resume_time")
+    private LocalDateTime resumeTime;
+
     // Constructors
     public PipelineExecution() {}
 
@@ -190,5 +193,13 @@ public class PipelineExecution {
 
     public void setOriginalFlowExecutionId(UUID originalFlowExecutionId) {
         this.originalFlowExecutionId = originalFlowExecutionId;
+    }
+
+    public LocalDateTime getResumeTime() {
+        return resumeTime;
+    }
+
+    public void setResumeTime(LocalDateTime resumeTime) {
+        this.resumeTime = resumeTime;
     }
 }

@@ -22,6 +22,9 @@ public class CombinedFlowDto {
     @NotNull(message = "Squash test case ID is required")
     private Long squashTestCaseId;
 
+    @NotNull(message = "Squash test case is required")
+    private String squashTestCase;
+
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
     
@@ -31,9 +34,10 @@ public class CombinedFlowDto {
     // Constructors
     public CombinedFlowDto() {}
 
-    public CombinedFlowDto(List<CombinedFlowStepDto> flowSteps, Long squashTestCaseId) {
+    public CombinedFlowDto(List<CombinedFlowStepDto> flowSteps, Long squashTestCaseId, String squashTestCase) {
         this.flowSteps = flowSteps;
         this.squashTestCaseId = squashTestCaseId;
+        this.squashTestCase = squashTestCase;
     }
 
     // Getters and Setters
@@ -59,6 +63,14 @@ public class CombinedFlowDto {
 
     public void setSquashTestCaseId(Long squashTestCaseId) {
         this.squashTestCaseId = squashTestCaseId;
+    }
+
+    public String getSquashTestCase() {
+        return squashTestCase;
+    }
+
+    public void setSquashTestCase(String squashTestCase) {
+        this.squashTestCase = squashTestCase;
     }
 
     public LocalDateTime getCreatedAt() {

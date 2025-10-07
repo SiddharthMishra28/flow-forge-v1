@@ -31,7 +31,9 @@ public class TestDataService {
         }
         TestData testData = new TestData();
         testData.setApplicationId(testDataDto.getApplicationId());
+        testData.setApplicationName(testDataDto.getApplicationName());
         testData.setCategory(testDataDto.getCategory());
+        testData.setDescription(testDataDto.getDescription());
         testData.setVariables(testDataDto.getVariables());
         
         TestData savedTestData = testDataRepository.save(testData);
@@ -59,6 +61,10 @@ public class TestDataService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid applicationId");
             }
             testData.setApplicationId(testDataDto.getApplicationId());
+        }
+
+        if (testDataDto.getApplicationName() != null) {
+            testData.setApplicationName(testDataDto.getApplicationName());
         }
 
         if (testDataDto.getCategory() != null) {
@@ -106,6 +112,7 @@ public class TestDataService {
         TestDataDto dto = new TestDataDto();
         dto.setDataId(testData.getDataId());
         dto.setApplicationId(testData.getApplicationId());
+        dto.setApplicationName(testData.getApplicationName());
         dto.setCategory(testData.getCategory());
         dto.setDescription(testData.getDescription());
         dto.setVariables(testData.getVariables());

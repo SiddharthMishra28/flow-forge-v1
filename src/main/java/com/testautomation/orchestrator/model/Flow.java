@@ -27,6 +27,10 @@ public class Flow {
     @Column(name = "squash_test_case_id", nullable = false)
     private Long squashTestCaseId;
 
+    @NotNull
+    @Column(name = "squash_test_case", nullable = false)
+    private String squashTestCase;
+
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -39,9 +43,10 @@ public class Flow {
     // Constructors
     public Flow() {}
 
-    public Flow(List<Long> flowStepIds, Long squashTestCaseId) {
+    public Flow(List<Long> flowStepIds, Long squashTestCaseId, String squashTestCase) {
         this.flowStepIds = flowStepIds;
         this.squashTestCaseId = squashTestCaseId;
+        this.squashTestCase = squashTestCase;
     }
 
     // Getters and Setters
@@ -67,6 +72,14 @@ public class Flow {
 
     public void setSquashTestCaseId(Long squashTestCaseId) {
         this.squashTestCaseId = squashTestCaseId;
+    }
+
+    public String getSquashTestCase() {
+        return squashTestCase;
+    }
+
+    public void setSquashTestCase(String squashTestCase) {
+        this.squashTestCase = squashTestCase;
     }
 
 

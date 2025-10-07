@@ -23,6 +23,10 @@ public class TestData {
     private Long applicationId;
 
     @NotNull
+    @Column(name = "application_name", nullable = false)
+    private String applicationName;
+
+    @NotNull
     @Column(nullable = false)
     private String category;
 
@@ -44,8 +48,9 @@ public class TestData {
     // Constructors
     public TestData() {}
 
-    public TestData(Long applicationId, String category, String description, Map<String, String> variables) {
+    public TestData(Long applicationId, String applicationName, String category, String description, Map<String, String> variables) {
         this.applicationId = applicationId;
+        this.applicationName = applicationName;
         this.category = category;
         this.description = description;
         this.variables = variables;
@@ -66,6 +71,14 @@ public class TestData {
 
     public void setApplicationId(Long applicationId) {
         this.applicationId = applicationId;
+    }
+
+    public String getApplicationName() {
+        return applicationName;
+    }
+
+    public void setApplicationName(String applicationName) {
+        this.applicationName = applicationName;
     }
 
     public String getCategory() {

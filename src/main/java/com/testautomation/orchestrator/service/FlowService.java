@@ -97,6 +97,7 @@ public class FlowService {
         
         existingFlow.setFlowStepIds(flowDto.getFlowStepIds());
         existingFlow.setSquashTestCaseId(flowDto.getSquashTestCaseId());
+        existingFlow.setSquashTestCase(flowDto.getSquashTestCase());
         
         Flow updatedFlow = flowRepository.save(existingFlow);
         
@@ -161,6 +162,7 @@ public class FlowService {
         Flow flow = new Flow();
         flow.setFlowStepIds(dto.getFlowStepIds());
         flow.setSquashTestCaseId(dto.getSquashTestCaseId());
+        flow.setSquashTestCase(dto.getSquashTestCase());
         return flow;
     }
 
@@ -169,6 +171,7 @@ public class FlowService {
         dto.setId(entity.getId());
         dto.setFlowStepIds(entity.getFlowStepIds());
         dto.setSquashTestCaseId(entity.getSquashTestCaseId());
+        dto.setSquashTestCase(entity.getSquashTestCase());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

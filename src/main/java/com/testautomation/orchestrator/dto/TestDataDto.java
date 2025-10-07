@@ -14,6 +14,9 @@ public class TestDataDto {
     @NotNull(message = "Application ID is required")
     private Long applicationId;
 
+    @NotNull(message = "Application Name is required")
+    private String applicationName;
+
     @NotNull(message = "Category is required")
     private String category;
 
@@ -31,8 +34,9 @@ public class TestDataDto {
     // Constructors
     public TestDataDto() {}
 
-    public TestDataDto(Long applicationId, String category, String description, Map<String, String> variables) {
+    public TestDataDto(Long applicationId, String applicationName, String category, String description, Map<String, String> variables) {
         this.applicationId = applicationId;
+        this.applicationName = applicationName;
         this.category = category;
         this.description = description;
         this.variables = variables;
@@ -53,6 +57,14 @@ public class TestDataDto {
 
     public void setApplicationId(Long applicationId) {
         this.applicationId = applicationId;
+    }
+
+    public String getApplicationName() {
+        return applicationName;
+    }
+
+    public void setApplicationName(String applicationName) {
+        this.applicationName = applicationName;
     }
 
     public String getCategory() {

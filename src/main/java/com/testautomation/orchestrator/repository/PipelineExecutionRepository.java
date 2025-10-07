@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,4 +54,7 @@ public interface PipelineExecutionRepository extends JpaRepository<PipelineExecu
     
     @Query("SELECT pe FROM PipelineExecution pe WHERE pe.flowStepId = :flowStepId ORDER BY pe.createdAt")
     List<PipelineExecution> findByFlowStepIdIncludingReplays(@Param("flowStepId") Long flowStepId);
+    
+    // Method to find scheduled executions ready to resume
+    List<PipelineExecution> findByStatusAndResumeTimeBefore(ExecutionStatus status, LocalDateTime resumeTime);
 }
