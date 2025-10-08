@@ -9,6 +9,8 @@ import com.testautomation.orchestrator.util.OutputEnvParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -607,6 +609,13 @@ public class FlowExecutionService {
                 .stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FlowExecutionDto> getFlowExecutionsByFlowId(Long flowId, Pageable pageable) {
+        logger.debug("Fetching flow executions for flow ID: {} with pagination: {}", flowId, pageable);
+        return flowExecutionRepository.findByFlowId(flowId, pageable)
+                .map(this::convertToDto);
     }
 
     private FlowExecutionDto convertToDto(FlowExecution entity) {

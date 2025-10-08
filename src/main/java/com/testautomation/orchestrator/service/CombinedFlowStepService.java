@@ -9,6 +9,8 @@ import com.testautomation.orchestrator.repository.TestDataRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -79,12 +81,26 @@ public class CombinedFlowStepService {
     }
 
     @Transactional(readOnly = true)
+    public Page<CombinedFlowStepDto> getAllFlowSteps(Pageable pageable) {
+        logger.debug("Fetching all flow steps with pagination: {}", pageable);
+        return flowStepRepository.findAll(pageable)
+                .map(this::convertToDto);
+    }
+
+    @Transactional(readOnly = true)
     public List<CombinedFlowStepDto> getFlowStepsByApplicationId(Long applicationId) {
         logger.debug("Fetching flow steps for application ID: {}", applicationId);
         return flowStepRepository.findByApplicationId(applicationId)
                 .stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CombinedFlowStepDto> getFlowStepsByApplicationId(Long applicationId, Pageable pageable) {
+        logger.debug("Fetching flow steps for application ID: {} with pagination: {}", applicationId, pageable);
+        return flowStepRepository.findByApplicationId(applicationId, pageable)
+                .map(this::convertToDto);
     }
 
     public CombinedFlowStepDto updateFlowStep(Long id, CombinedFlowStepDto flowStepDto) {

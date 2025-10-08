@@ -5,6 +5,8 @@ import com.testautomation.orchestrator.model.TestData;
 import com.testautomation.orchestrator.repository.ApplicationRepository;
 import com.testautomation.orchestrator.repository.TestDataRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +52,11 @@ public class TestDataService {
         return testDataRepository.findAll().stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
+    }
+
+    public Page<TestDataDto> getAllTestData(Pageable pageable) {
+        return testDataRepository.findAll(pageable)
+                .map(this::convertToDto);
     }
 
     public TestDataDto updateTestData(Long dataId, TestDataDto testDataDto) {

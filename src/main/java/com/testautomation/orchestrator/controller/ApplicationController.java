@@ -13,6 +13,10 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -60,13 +64,37 @@ public class ApplicationController {
     }
 
     @GetMapping
-    @Operation(summary = "Get all applications", description = "Retrieve all GitLab applications")
+    @Operation(summary = "Get all applications", description = "Retrieve all GitLab applications. Supports pagination and sorting.")
     @ApiResponse(responseCode = "200", description = "Applications retrieved successfully")
-    public ResponseEntity<List<ApplicationDto>> getAllApplications() {
-        logger.debug("Fetching all applications");
+    public ResponseEntity<?> getAllApplications(
+            @Parameter(description = "Page number (0-based)") @RequestParam(required = false) Integer page,
+            @Parameter(description = "Page size") @RequestParam(required = false) Integer size,
+            @Parameter(description = "Sort by field (e.g., 'id', 'applicationName', 'createdAt', 'updatedAt')") @RequestParam(required = false) String sortBy,
+            @Parameter(description = "Sort direction (ASC or DESC)") @RequestParam(required = false, defaultValue = "ASC") String sortDirection) {
         
-        List<ApplicationDto> applications = applicationService.getAllApplications();
-        return ResponseEntity.ok(applications);
+        logger.debug("Fetching all applications with page: {}, size: {}, sortBy: {}, sortDirection: {}", 
+                    page, size, sortBy, sortDirection);
+        
+        // If pagination parameters are provided, use pagination
+        if (page != null || size != null) {
+            int pageNumber = page != null ? page : 0;
+            int pageSize = size != null ? size : 20; // default page size
+            
+            Sort sort = Sort.unsorted();
+            if (sortBy != null && !sortBy.trim().isEmpty()) {
+                Sort.Direction direction = Sort.Direction.fromString(sortDirection);
+                sort = Sort.by(direction, sortBy);
+            }
+            
+            Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
+            Page<ApplicationDto> applicationsPage = applicationService.getAllApplications(pageable);
+            
+            return ResponseEntity.ok(applicationsPage);
+        } else {
+            // Return all data without pagination (backward compatibility)
+            List<ApplicationDto> applications = applicationService.getAllApplications();
+            return ResponseEntity.ok(applications);
+        }
     }
 
     @PutMapping("/{id}")

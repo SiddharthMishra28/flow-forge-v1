@@ -186,43 +186,92 @@ Open the log streaming page in your browser to see live logs. Replace `{flowExec
 
 ### Endpoints
 
-#### Applications
+#### Applications (GitLab Application Management API)
 - `POST /api/applications`: Create a new application.
 - `GET /api/applications/{id}`: Get an application by ID.
-- `GET /api/applications`: Get all applications.
+- `GET /api/applications`: Get all applications. **Supports pagination & sorting**
 - `PUT /api/applications/{id}`: Update an application.
 - `DELETE /api/applications/{id}`: Delete an application.
 
-#### Test Data
+#### Test Data (Test Data Management Operations API)
 - `POST /api/test-data`: Create new test data.
 - `GET /api/test-data/{id}`: Get test data by ID.
-- `GET /api/test-data`: Get all test data.
+- `GET /api/test-data`: Get all test data. **Supports pagination & sorting**
 - `PUT /api/test-data/{id}`: Update test data.
 - `DELETE /api/test-data/{id}`: Delete test data.
 
-#### Flows
+#### Flows (Flow Management API)
 - `POST /api/flows`: Create a new flow with embedded steps and test data.
 - `GET /api/flows/{id}`: Get a flow by ID.
-- `GET /api/flows`: Get all flows.
+- `GET /api/flows`: Get all flows. **Supports pagination & sorting**
 - `PUT /api/flows/{id}`: Update a flow.
 - `DELETE /api/flows/{id}`: Delete a flow.
 - `POST /api/flows/{id}/execute`: Execute a flow.
 
-#### Flow Steps
+#### Flow Steps (Individual Flow Step Management API)
 - `POST /api/flow-steps`: Create a new flow step.
 - `GET /api/flow-steps/{id}`: Get a flow step by ID.
-- `GET /api/flow-steps`: Get all flow steps.
+- `GET /api/flow-steps`: Get all flow steps. **Supports pagination & sorting**
 - `PUT /api/flow-steps/{id}`: Update a flow step.
 - `DELETE /api/flow-steps/{id}`: Delete a flow step.
 
-#### Flow Executions
+#### Flow Executions (Flow Execution Management API)
 - `GET /api/flow-executions/{id}`: Get flow execution details.
-- `GET /api/flow-executions`: Get all flow executions.
+- `GET /api/flows/{flowId}/executions`: Get flow executions by flow ID. **Supports pagination & sorting**
 - `POST /api/flow-executions/{flowExecutionUUID}/replay/{failedFlowStepId}`: Replay a failed flow from a specific step.
 
-#### Pipeline Executions
-- `GET /api/pipeline-executions/{id}`: Get pipeline execution details.
-- `GET /api/pipeline-executions`: Get all pipeline executions.
+#### Pipeline Executions (Pipeline Execution Monitoring API)
+- `GET /api/flow-executions/{flowExecutionUUID}/pipelines`: Get all pipeline executions for a flow execution. **Supports pagination & sorting**
+- `GET /api/flow-executions/{flowExecutionUUID}/pipelines/{pipelineExecutionId}`: Get specific pipeline execution details.
+- `GET /api/flow-executions/flows/{flowId}/pipelines`: Get all pipeline executions for a flow.
+- `GET /api/flow-executions/flow-steps/{flowStepId}/pipelines`: Get all pipeline executions for a flow step.
+- `GET /api/flow-executions/{flowExecutionUUID}/gitlab-pipelines/{gitlabPipelineId}`: Get pipeline execution by GitLab pipeline ID.
+
+## 📄 Pagination and Sorting
+
+All "Get All" endpoints now support configurable pagination and sorting for better performance and user experience:
+
+### Parameters
+- `page` (optional): Page number (0-based). Default: 0
+- `size` (optional): Page size. Default: 20
+- `sortBy` (optional): Field to sort by (e.g., 'id', 'createdAt', 'updatedAt', 'applicationName', etc.)
+- `sortDirection` (optional): Sort direction ('ASC' or 'DESC'). Default: 'ASC'
+
+### Backward Compatibility
+- **Without parameters**: Returns all records (List<T>) - maintains existing behavior
+- **With parameters**: Returns paginated response (Page<T>) with metadata
+
+### Example Usage
+```bash
+# Get all applications with pagination and sorting
+GET /api/applications?page=0&size=10&sortBy=applicationName&sortDirection=ASC
+
+# Get all flows filtered by squash test case with pagination
+GET /api/flows?squashTestCaseId=123&page=0&size=20&sortBy=createdAt&sortDirection=DESC
+
+# Get all flow steps filtered by application with sorting only
+GET /api/flow-steps?applicationId=1&sortBy=createdAt&sortDirection=DESC
+
+# Get flow executions with pagination
+GET /api/flows/1/executions?page=0&size=10&sortBy=startTime&sortDirection=DESC
+
+# Get pipeline executions with sorting
+GET /api/flow-executions/uuid/pipelines?sortBy=startTime&sortDirection=DESC
+```
+
+### Response Format
+**Paginated Response (Page<T>)**:
+```json
+{
+  "content": [...],
+  "totalElements": 100,
+  "totalPages": 5,
+  "number": 0,
+  "size": 20,
+  "first": true,
+  "last": false
+}
+```
 
 #### Analytics
 - `GET /api/analytics/execution-stats`: Get execution statistics.

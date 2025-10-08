@@ -2,6 +2,8 @@ package com.testautomation.orchestrator.repository;
 
 import com.testautomation.orchestrator.enums.ExecutionStatus;
 import com.testautomation.orchestrator.model.PipelineExecution;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,6 +17,8 @@ import java.util.UUID;
 public interface PipelineExecutionRepository extends JpaRepository<PipelineExecution, Long> {
     
     List<PipelineExecution> findByFlowExecutionId(UUID flowExecutionId);
+    
+    Page<PipelineExecution> findByFlowExecutionId(UUID flowExecutionId, Pageable pageable);
     
     List<PipelineExecution> findByFlowId(Long flowId);
     

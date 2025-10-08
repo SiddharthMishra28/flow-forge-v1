@@ -6,6 +6,8 @@ import com.testautomation.orchestrator.repository.PipelineExecutionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,12 @@ public class PipelineExecutionService {
                 .stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
+    }
+
+    public Page<PipelineExecutionDto> getPipelineExecutionsByFlowExecutionId(UUID flowExecutionId, Pageable pageable) {
+        logger.debug("Fetching pipeline executions for flow execution ID: {} with pagination: {}", flowExecutionId, pageable);
+        return pipelineExecutionRepository.findByFlowExecutionId(flowExecutionId, pageable)
+                .map(this::convertToDto);
     }
 
     public Optional<PipelineExecutionDto> getPipelineExecutionById(Long pipelineExecutionId) {
