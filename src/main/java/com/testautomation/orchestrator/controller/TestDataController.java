@@ -83,4 +83,12 @@ public class TestDataController {
         testDataService.deleteTestData(dataId);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/{applicationId}/test-data")
+    @Operation(summary = "Get test data by application ID", description = "Retrieves all test data entries for a specific application ID")
+    public ResponseEntity<List<TestDataDto>> getTestDataByApplicationId(
+            @Parameter(description = "Application ID") @PathVariable Long applicationId) {
+        List<TestDataDto> testDataList = testDataService.getTestDataByApplicationId(applicationId);
+        return ResponseEntity.ok(testDataList);
+    }
 }

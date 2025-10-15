@@ -5,5 +5,6 @@ public enum ExecutionStatus {
     PASSED,
     FAILED,
     CANCELLED,
-    SCHEDULED
+    SCHEDULED,
+    IN_PROGRESS
 }

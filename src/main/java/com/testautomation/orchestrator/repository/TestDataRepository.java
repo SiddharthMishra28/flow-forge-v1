@@ -11,5 +11,7 @@ public interface TestDataRepository extends JpaRepository<TestData, Long> {
     
     List<TestData> findByDataIdIn(List<Long> dataIds);
     
+    List<TestData> findByApplicationId(Long applicationId);
+    
     void deleteByDataIdIn(List<Long> dataIds);
 }

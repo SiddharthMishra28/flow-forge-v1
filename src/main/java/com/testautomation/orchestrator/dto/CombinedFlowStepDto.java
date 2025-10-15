@@ -3,7 +3,7 @@ package com.testautomation.orchestrator.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import com.testautomation.orchestrator.validator.ValidInvokeTimer;
+import com.testautomation.orchestrator.validator.ValidInvokeScheduler;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -39,9 +39,9 @@ public class CombinedFlowStepDto {
     private List<TestDataDto> testData;
     
     @Valid
-    @ValidInvokeTimer
-    @Schema(description = "Timer configuration for scheduling or delaying step execution")
-    private InvokeTimerDto invokeTimer;
+    @ValidInvokeScheduler
+    @Schema(description = "Scheduler configuration for scheduling or delaying step execution")
+    private InvokeSchedulerDto invokeScheduler;
     
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
@@ -53,7 +53,7 @@ public class CombinedFlowStepDto {
     public CombinedFlowStepDto() {}
 
     public CombinedFlowStepDto(Long applicationId, String branch, String testTag, String testStage, String description,
-                              List<Long> squashStepIds, List<TestDataDto> testData, InvokeTimerDto invokeTimer) {
+                              List<Long> squashStepIds, List<TestDataDto> testData, InvokeSchedulerDto invokeScheduler) {
         this.applicationId = applicationId;
         this.branch = branch;
         this.testTag = testTag;
@@ -61,7 +61,7 @@ public class CombinedFlowStepDto {
         this.description = description;
         this.squashStepIds = squashStepIds;
         this.testData = testData;
-        this.invokeTimer = invokeTimer;
+        this.invokeScheduler = invokeScheduler;
     }
 
     // Getters and Setters
@@ -129,12 +129,12 @@ public class CombinedFlowStepDto {
         this.testData = testData;
     }
 
-    public InvokeTimerDto getInvokeTimer() {
-        return invokeTimer;
+    public InvokeSchedulerDto getInvokeScheduler() {
+        return invokeScheduler;
     }
 
-    public void setInvokeTimer(InvokeTimerDto invokeTimer) {
-        this.invokeTimer = invokeTimer;
+    public void setInvokeScheduler(InvokeSchedulerDto invokeScheduler) {
+        this.invokeScheduler = invokeScheduler;
     }
 
     public LocalDateTime getCreatedAt() {

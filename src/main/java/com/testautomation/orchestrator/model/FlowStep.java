@@ -50,7 +50,7 @@ public class FlowStep {
 
     @Embedded
     @Valid
-    private InvokeTimer invokeTimer;
+    private InvokeScheduler invokeScheduler;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -64,7 +64,7 @@ public class FlowStep {
     public FlowStep() {}
 
     public FlowStep(Long applicationId, String branch, String testTag, String testStage, String description,
-                   List<Long> squashStepIds, List<Long> testDataIds, InvokeTimer invokeTimer) {
+                   List<Long> squashStepIds, List<Long> testDataIds, InvokeScheduler invokeScheduler) {
         this.applicationId = applicationId;
         this.branch = branch;
         this.testTag = testTag;
@@ -72,7 +72,7 @@ public class FlowStep {
         this.description = description;
         this.squashStepIds = squashStepIds;
         this.testDataIds = testDataIds;
-        this.invokeTimer = invokeTimer;
+        this.invokeScheduler = invokeScheduler;
     }
 
     // Getters and Setters
@@ -140,12 +140,12 @@ public class FlowStep {
         this.testDataIds = testDataIds;
     }
 
-    public InvokeTimer getInvokeTimer() {
-        return invokeTimer;
+    public InvokeScheduler getInvokeScheduler() {
+        return invokeScheduler;
     }
 
-    public void setInvokeTimer(InvokeTimer invokeTimer) {
-        this.invokeTimer = invokeTimer;
+    public void setInvokeScheduler(InvokeScheduler invokeScheduler) {
+        this.invokeScheduler = invokeScheduler;
     }
 
     public LocalDateTime getCreatedAt() {

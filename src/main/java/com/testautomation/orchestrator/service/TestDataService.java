@@ -94,6 +94,15 @@ public class TestDataService {
         testDataRepository.deleteById(dataId);
     }
 
+    public List<TestDataDto> getTestDataByApplicationId(Long applicationId) {
+        if (applicationId == null || !applicationRepository.existsById(applicationId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or missing applicationId");
+        }
+        return testDataRepository.findByApplicationId(applicationId).stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+    }
+
     /**
      * Merges multiple test data maps into a single map.
      * Used by FlowExecutionService to merge all test data for a flow step.

@@ -1,12 +1,7 @@
 package com.testautomation.orchestrator.service;
 
-import com.testautomation.orchestrator.dto.CombinedFlowDto;
-import com.testautomation.orchestrator.dto.CombinedFlowStepDto;
-import com.testautomation.orchestrator.dto.InvokeTimerDto;
-import com.testautomation.orchestrator.dto.TestDataDto;
-import com.testautomation.orchestrator.model.Flow;
-import com.testautomation.orchestrator.model.FlowStep;
-import com.testautomation.orchestrator.model.InvokeTimer;
+import com.testautomation.orchestrator.dto.*;
+import com.testautomation.orchestrator.model.*;
 import com.testautomation.orchestrator.repository.ApplicationRepository;
 import com.testautomation.orchestrator.repository.FlowRepository;
 import com.testautomation.orchestrator.repository.FlowStepRepository;
@@ -67,7 +62,7 @@ public class CombinedFlowService {
             flowStep.setDescription(stepDto.getDescription());
             flowStep.setSquashStepIds(stepDto.getSquashStepIds());
             flowStep.setTestDataIds(testDataIds);
-            flowStep.setInvokeTimer(convertInvokeTimerDtoToEntity(stepDto.getInvokeTimer()));
+            flowStep.setInvokeScheduler(convertInvokeSchedulerDtoToEntity(stepDto.getInvokeScheduler()));
             
             FlowStep savedFlowStep = flowStepRepository.save(flowStep);
             savedFlowSteps.add(savedFlowStep);
@@ -177,7 +172,7 @@ public class CombinedFlowService {
             flowStep.setDescription(stepDto.getDescription());
             flowStep.setSquashStepIds(stepDto.getSquashStepIds());
             flowStep.setTestDataIds(testDataIds);
-            flowStep.setInvokeTimer(convertInvokeTimerDtoToEntity(stepDto.getInvokeTimer()));
+            flowStep.setInvokeScheduler(convertInvokeSchedulerDtoToEntity(stepDto.getInvokeScheduler()));
             
             FlowStep savedFlowStep = flowStepRepository.save(flowStep);
             newFlowSteps.add(savedFlowStep);
@@ -271,7 +266,7 @@ public class CombinedFlowService {
         dto.setTestStage(flowStep.getTestStage());
         dto.setDescription(flowStep.getDescription());
         dto.setSquashStepIds(flowStep.getSquashStepIds());
-        dto.setInvokeTimer(convertInvokeTimerEntityToDto(flowStep.getInvokeTimer()));
+        dto.setInvokeScheduler(convertInvokeSchedulerEntityToDto(flowStep.getInvokeScheduler()));
         dto.setCreatedAt(flowStep.getCreatedAt());
         dto.setUpdatedAt(flowStep.getUpdatedAt());
         
@@ -288,28 +283,40 @@ public class CombinedFlowService {
         return dto;
     }
 
-    private InvokeTimer convertInvokeTimerDtoToEntity(InvokeTimerDto dto) {
+    private InvokeScheduler convertInvokeSchedulerDtoToEntity(InvokeSchedulerDto dto) {
         if (dto == null) {
             return null;
         }
         
-        InvokeTimer entity = new InvokeTimer();
-        entity.setMinutes(dto.getMinutes());
-        entity.setHours(dto.getHours());
-        entity.setDays(dto.getDays());
+        InvokeScheduler entity = new InvokeScheduler();
+        entity.setType(dto.getType());
+        
+        if (dto.getTimer() != null) {
+            Timer timer = new Timer();
+            timer.setMinutes(dto.getTimer().getMinutes());
+            timer.setHours(dto.getTimer().getHours());
+            timer.setDays(dto.getTimer().getDays());
+            entity.setTimer(timer);
+        }
         
         return entity;
     }
 
-    private InvokeTimerDto convertInvokeTimerEntityToDto(InvokeTimer entity) {
+    private InvokeSchedulerDto convertInvokeSchedulerEntityToDto(InvokeScheduler entity) {
         if (entity == null) {
             return null;
         }
         
-        InvokeTimerDto dto = new InvokeTimerDto();
-        dto.setMinutes(entity.getMinutes());
-        dto.setHours(entity.getHours());
-        dto.setDays(entity.getDays());
+        InvokeSchedulerDto dto = new InvokeSchedulerDto();
+        dto.setType(entity.getType());
+        
+        if (entity.getTimer() != null) {
+            TimerDto timerDto = new TimerDto();
+            timerDto.setMinutes(entity.getTimer().getMinutes());
+            timerDto.setHours(entity.getTimer().getHours());
+            timerDto.setDays(entity.getTimer().getDays());
+            dto.setTimer(timerDto);
+        }
         
         return dto;
     }

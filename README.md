@@ -336,12 +336,64 @@ FlowForge includes a sophisticated, memory-optimized scheduling system that allo
 
 ### How It Works
 
-1. **Timer Configuration**: Define delays using the `invokeTimer` object with `minutes`, `hours`, and `days` fields (all with "+" prefix).
-2. **Database Persistence**: When a step needs to be delayed, the system calculates the resume time and stores it in the database with `SCHEDULED` status.
-3. **Background Processing**: A lightweight background service checks every minute for scheduled executions that are ready to resume.
-4. **Automatic Resumption**: When the scheduled time arrives, the execution automatically resumes from the next step.
+1. **Scheduler Configuration**: Define scheduling using the `invokeScheduler` object with `type` and `timer` fields:
+   - **Delayed Execution**: Use `type: "delayed"` with timer values having "+" prefix (e.g., `"+10"` minutes after previous step completion)
+   - **Scheduled Execution**: Use `type: "scheduled"` with absolute timer values (e.g., `"14"` for 2 PM, `"30"` for 30 minutes past the hour)
+2. **Database Persistence**: When a step needs to be scheduled/delayed, the system calculates the resume time and stores it in the database with `SCHEDULED` status.
+3. **Background Processing**: A configurable background service (default: every 60 seconds) checks for scheduled executions that are ready to resume.
+4. **Automatic Resumption**: When the scheduled time arrives, the execution status changes to `IN_PROGRESS` to prevent replay delays and automatically resumes from the next step.
+
+### New Test Data Endpoint
+
+A new endpoint has been added for retrieving test data by application ID:
+
+**GET** `/api/{applicationId}/test-data`
+- Retrieves all test data entries for a specific application ID
+- **Path Parameter**: `applicationId` (Long) - The ID of the application
+- **Response**: List of TestDataDto objects
+
+### Configuration
+
+The pipeline status polling interval can be configured in `application.yml`:
+
+```yaml
+scheduling:
+  pipeline-status:
+    # Pipeline status polling interval in milliseconds (default: 60 seconds)
+    polling-interval: ${PIPELINE_STATUS_POLLING_INTERVAL:60000}
+```
 
 ### Timer Format
+
+For **delayed** type:
+```json
+{
+  "invokeScheduler": {
+    "type": "delayed",
+    "timer": {
+      "minutes": "+10",  // 10 minutes after previous step completion
+      "hours": "+2",     // 2 hours after previous step completion  
+      "days": "+1"       // 1 day after previous step completion
+    }
+  }
+}
+```
+
+For **scheduled** type:
+```json
+{
+  "invokeScheduler": {
+    "type": "scheduled",
+    "timer": {
+      "minutes": "30",   // 30 minutes past the hour
+      "hours": "14",     // 2 PM (24-hour format)
+      "days": "1"        // 1 day from now
+    }
+  }
+}
+```
+
+### Legacy Timer Format (Deprecated)
 
 ```json
 {

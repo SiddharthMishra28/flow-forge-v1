@@ -49,6 +49,9 @@ scheduling:
     # Format: second minute hour day month weekday
     # 0 0 2 * * * = Every day at 2:00 AM
     cron: ${TOKEN_VALIDATION_CRON:0 0 2 * * *}
+  pipeline-status:
+    # Pipeline status polling interval in milliseconds (default: 60 seconds)
+    polling-interval: ${PIPELINE_STATUS_POLLING_INTERVAL:60000}
 
 ---
 spring:
