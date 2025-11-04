@@ -128,6 +128,29 @@ public class GitLabApiClient {
                 .doOnError(error -> logger.error("Failed to validate GitLab connection: {}", error.getMessage()));
     }
 
+    /**
+     * Get all branches for a GitLab project
+     */
+    public Mono<GitLabBranchResponse[]> getProjectBranches(String gitlabBaseUrl, String projectId, String accessToken) {
+        String url = String.format("%s/api/v4/projects/%s/repository/branches", gitlabBaseUrl, projectId);
+        
+        logger.info("Fetching branches for GitLab project {}", projectId);
+        
+        return webClient.get()
+                .uri(url)
+                .header("PRIVATE-TOKEN", accessToken)
+                .retrieve()
+                .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
+                         response -> response.bodyToMono(String.class)
+                                 .doOnNext(body -> logger.error("GitLab branches API error response: {}", body))
+                                 .then(Mono.error(new RuntimeException("GitLab branches API error: " + response.statusCode()))))
+                .bodyToMono(GitLabBranchResponse[].class)
+                .timeout(Duration.ofSeconds(30))
+                .doOnSuccess(branches -> logger.info("Successfully fetched {} branches for project {}", 
+                                                   branches != null ? branches.length : 0, projectId))
+                .doOnError(error -> logger.error("Failed to fetch branches for project {}: {}", projectId, error.getMessage()));
+    }
+
     // Inner classes for GitLab API request/response
     public static class GitLabPipelineRequest {
         private String ref;
@@ -418,6 +441,196 @@ public class GitLabApiClient {
 
         public void setDescription(String description) {
             this.description = description;
+        }
+    }
+
+    public static class GitLabBranchResponse {
+        private String name;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("default")
+        private boolean isDefault;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("protected")
+        private boolean isProtected;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("merged")
+        private boolean isMerged;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("developers_can_push")
+        private boolean developersCanPush;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("developers_can_merge")
+        private boolean developersCanMerge;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("can_push")
+        private boolean canPush;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("web_url")
+        private String webUrl;
+        
+        private GitLabCommit commit;
+
+        public GitLabBranchResponse() {}
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public boolean isDefault() {
+            return isDefault;
+        }
+
+        public void setDefault(boolean isDefault) {
+            this.isDefault = isDefault;
+        }
+
+        public boolean isProtected() {
+            return isProtected;
+        }
+
+        public void setProtected(boolean isProtected) {
+            this.isProtected = isProtected;
+        }
+
+        public boolean isMerged() {
+            return isMerged;
+        }
+
+        public void setMerged(boolean isMerged) {
+            this.isMerged = isMerged;
+        }
+
+        public boolean isDevelopersCanPush() {
+            return developersCanPush;
+        }
+
+        public void setDevelopersCanPush(boolean developersCanPush) {
+            this.developersCanPush = developersCanPush;
+        }
+
+        public boolean isDevelopersCanMerge() {
+            return developersCanMerge;
+        }
+
+        public void setDevelopersCanMerge(boolean developersCanMerge) {
+            this.developersCanMerge = developersCanMerge;
+        }
+
+        public boolean isCanPush() {
+            return canPush;
+        }
+
+        public void setCanPush(boolean canPush) {
+            this.canPush = canPush;
+        }
+
+        public String getWebUrl() {
+            return webUrl;
+        }
+
+        public void setWebUrl(String webUrl) {
+            this.webUrl = webUrl;
+        }
+
+        public GitLabCommit getCommit() {
+            return commit;
+        }
+
+        public void setCommit(GitLabCommit commit) {
+            this.commit = commit;
+        }
+    }
+
+    public static class GitLabCommit {
+        private String id;
+        private String message;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("short_id")
+        private String shortId;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("author_name")
+        private String authorName;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("author_email")
+        private String authorEmail;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("committed_date")
+        private String committedDate;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("created_at")
+        private String createdAt;
+        
+        @com.fasterxml.jackson.annotation.JsonProperty("web_url")
+        private String webUrl;
+
+        public GitLabCommit() {}
+
+        public String getId() {
+            return id;
+        }
+
+        public void setId(String id) {
+            this.id = id;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public void setMessage(String message) {
+            this.message = message;
+        }
+
+        public String getShortId() {
+            return shortId;
+        }
+
+        public void setShortId(String shortId) {
+            this.shortId = shortId;
+        }
+
+        public String getAuthorName() {
+            return authorName;
+        }
+
+        public void setAuthorName(String authorName) {
+            this.authorName = authorName;
+        }
+
+        public String getAuthorEmail() {
+            return authorEmail;
+        }
+
+        public void setAuthorEmail(String authorEmail) {
+            this.authorEmail = authorEmail;
+        }
+
+        public String getCommittedDate() {
+            return committedDate;
+        }
+
+        public void setCommittedDate(String committedDate) {
+            this.committedDate = committedDate;
+        }
+
+        public String getCreatedAt() {
+            return createdAt;
+        }
+
+        public void setCreatedAt(String createdAt) {
+            this.createdAt = createdAt;
+        }
+
+        public String getWebUrl() {
+            return webUrl;
+        }
+
+        public void setWebUrl(String webUrl) {
+            this.webUrl = webUrl;
         }
     }
 }

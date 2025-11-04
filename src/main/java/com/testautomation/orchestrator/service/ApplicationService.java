@@ -1,6 +1,7 @@
 package com.testautomation.orchestrator.service;
 
 import com.testautomation.orchestrator.dto.ApplicationDto;
+import com.testautomation.orchestrator.dto.BranchDto;
 import com.testautomation.orchestrator.dto.ValidationResponseDto;
 import com.testautomation.orchestrator.exception.GitLabValidationException;
 import com.testautomation.orchestrator.model.Application;
@@ -15,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -170,6 +172,55 @@ public class ApplicationService {
         return validateGitLabConnectionInternal(accessToken, projectId);
     }
 
+    /**
+     * Get all branches for a specific application's GitLab repository
+     */
+    @Transactional(readOnly = true)
+    public List<BranchDto> getApplicationBranches(Long applicationId) {
+        logger.info("Fetching branches for application ID: {}", applicationId);
+        
+        Application application = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + applicationId));
+        
+        try {
+            String decryptedToken = encryptionService.decrypt(application.getPersonalAccessToken());
+            
+            GitLabApiClient.GitLabBranchResponse[] branchResponses = gitLabApiClient
+                .getProjectBranches(gitLabConfig.getBaseUrl(), application.getGitlabProjectId(), decryptedToken)
+                .block(); // Blocking call for synchronous response
+            
+            if (branchResponses != null) {
+                logger.info("Successfully fetched {} branches for application ID: {}", branchResponses.length, applicationId);
+                
+                return Arrays.stream(branchResponses)
+                        .map(this::convertBranchToDto)
+                        .collect(Collectors.toList());
+            } else {
+                logger.warn("No branches found for application ID: {}", applicationId);
+                return List.of();
+            }
+        } catch (Exception e) {
+            logger.error("Failed to fetch branches for application ID {}: {}", applicationId, e.getMessage());
+            
+            String errorMessage = "Failed to fetch branches";
+            if (e.getMessage() != null) {
+                if (e.getMessage().contains("401")) {
+                    errorMessage = "Invalid access token or insufficient permissions";
+                } else if (e.getMessage().contains("403")) {
+                    errorMessage = "Access forbidden - check token permissions";
+                } else if (e.getMessage().contains("404")) {
+                    errorMessage = "Project not found or access denied";
+                } else if (e.getMessage().contains("timeout") || e.getMessage().contains("TimeoutException")) {
+                    errorMessage = "Connection timeout - GitLab server may be unreachable";
+                } else {
+                    errorMessage = "Failed to fetch branches: " + e.getMessage();
+                }
+            }
+            
+            throw new RuntimeException(errorMessage, e);
+        }
+    }
+
     private ValidationResponseDto validateGitLabConnectionInternal(String accessToken, String projectId) {
         logger.info("Validating GitLab connection for project: {}", projectId);
         
@@ -245,5 +296,36 @@ public class ApplicationService {
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
+    }
+
+    private BranchDto convertBranchToDto(GitLabApiClient.GitLabBranchResponse branchResponse) {
+        BranchDto branchDto = new BranchDto();
+        branchDto.setName(branchResponse.getName());
+        branchDto.setDefault(branchResponse.isDefault());
+        branchDto.setProtected(branchResponse.isProtected());
+        branchDto.setMerged(branchResponse.isMerged());
+        branchDto.setDevelopersCanPush(branchResponse.isDevelopersCanPush());
+        branchDto.setDevelopersCanMerge(branchResponse.isDevelopersCanMerge());
+        branchDto.setCanPush(branchResponse.isCanPush());
+        branchDto.setWebUrl(branchResponse.getWebUrl());
+        
+        // Convert commit information if available
+        if (branchResponse.getCommit() != null) {
+            BranchDto.Commit commitDto = new BranchDto.Commit();
+            GitLabApiClient.GitLabCommit gitLabCommit = branchResponse.getCommit();
+            
+            commitDto.setId(gitLabCommit.getId());
+            commitDto.setMessage(gitLabCommit.getMessage());
+            commitDto.setShortId(gitLabCommit.getShortId());
+            commitDto.setAuthorName(gitLabCommit.getAuthorName());
+            commitDto.setAuthorEmail(gitLabCommit.getAuthorEmail());
+            commitDto.setCommittedDate(gitLabCommit.getCommittedDate());
+            commitDto.setCreatedAt(gitLabCommit.getCreatedAt());
+            commitDto.setWebUrl(gitLabCommit.getWebUrl());
+            
+            branchDto.setCommit(commitDto);
+        }
+        
+        return branchDto;
     }
 }

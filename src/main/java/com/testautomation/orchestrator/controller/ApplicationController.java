@@ -1,6 +1,7 @@
 package com.testautomation.orchestrator.controller;
 
 import com.testautomation.orchestrator.dto.ApplicationDto;
+import com.testautomation.orchestrator.dto.BranchDto;
 import com.testautomation.orchestrator.dto.ValidationRequestDto;
 import com.testautomation.orchestrator.dto.ValidationResponseDto;
 import com.testautomation.orchestrator.service.ApplicationService;
@@ -176,6 +177,42 @@ public class ApplicationController {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
             } else {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+            }
+        }
+    }
+
+    @GetMapping("/{id}/branches")
+    @Operation(summary = "Get application branches", description = "Retrieve all branches from the GitLab repository associated with the application")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Branches retrieved successfully"),
+            @ApiResponse(responseCode = "404", description = "Application not found"),
+            @ApiResponse(responseCode = "401", description = "Invalid access token"),
+            @ApiResponse(responseCode = "403", description = "Access forbidden - insufficient permissions"),
+            @ApiResponse(responseCode = "500", description = "GitLab connection failed")
+    })
+    public ResponseEntity<List<BranchDto>> getApplicationBranches(
+            @Parameter(description = "Application ID") @PathVariable Long id) {
+        logger.info("Fetching branches for application with ID: {}", id);
+        
+        try {
+            List<BranchDto> branches = applicationService.getApplicationBranches(id);
+            logger.info("Successfully retrieved {} branches for application ID: {}", branches.size(), id);
+            return ResponseEntity.ok(branches);
+        } catch (IllegalArgumentException e) {
+            logger.error("Application not found: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Failed to fetch branches for application ID {}: {}", id, e.getMessage());
+            
+            // Determine appropriate HTTP status based on error type
+            if (e.getMessage().contains("401") || e.getMessage().contains("Invalid access token")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            } else if (e.getMessage().contains("403") || e.getMessage().contains("Access forbidden")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            } else if (e.getMessage().contains("404") || e.getMessage().contains("not found")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
             }
         }
     }
