@@ -112,16 +112,24 @@ public class GitLabApiClient {
     public Mono<GitLabProjectResponse> validateConnection(String gitlabBaseUrl, String projectId, String accessToken) {
         String url = String.format("%s/api/v4/projects/%s", gitlabBaseUrl, projectId);
         
-        logger.info("Validating GitLab connection for project {}", projectId);
+        logger.info("Validating GitLab connection for project {} from URL: {}", projectId, url);
+        logger.debug("Using access token length: {}", accessToken != null ? accessToken.length() : 0);
         
         return webClient.get()
                 .uri(url)
                 .header("PRIVATE-TOKEN", accessToken)
                 .retrieve()
                 .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
-                         response -> response.bodyToMono(String.class)
-                                 .doOnNext(body -> logger.error("GitLab validation error response: {}", body))
-                                 .then(Mono.error(new RuntimeException("GitLab validation failed: " + response.statusCode()))))
+                         response -> {
+                             int statusCode = response.statusCode().value();
+                             logger.error("GitLab validation API returned error status: {}", statusCode);
+                             
+                             return response.bodyToMono(String.class)
+                                     .doOnNext(body -> logger.error("GitLab validation API error response body: {}", body))
+                                     .then(Mono.error(new RuntimeException(
+                                         String.format("GitLab validation failed: %d %s", statusCode, 
+                                                      getStatusMessage(statusCode)))));
+                         })
                 .bodyToMono(GitLabProjectResponse.class)
                 .timeout(Duration.ofSeconds(15))
                 .doOnSuccess(response -> logger.info("GitLab connection validated successfully for project: {}", response.getName()))
@@ -134,21 +142,50 @@ public class GitLabApiClient {
     public Mono<GitLabBranchResponse[]> getProjectBranches(String gitlabBaseUrl, String projectId, String accessToken) {
         String url = String.format("%s/api/v4/projects/%s/repository/branches", gitlabBaseUrl, projectId);
         
-        logger.info("Fetching branches for GitLab project {}", projectId);
+        logger.info("Fetching branches for GitLab project {} from URL: {}", projectId, url);
+        logger.debug("Using access token length: {}", accessToken != null ? accessToken.length() : 0);
         
         return webClient.get()
                 .uri(url)
                 .header("PRIVATE-TOKEN", accessToken)
                 .retrieve()
                 .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
-                         response -> response.bodyToMono(String.class)
-                                 .doOnNext(body -> logger.error("GitLab branches API error response: {}", body))
-                                 .then(Mono.error(new RuntimeException("GitLab branches API error: " + response.statusCode()))))
+                         response -> {
+                             int statusCode = response.statusCode().value();
+                             logger.error("GitLab branches API returned error status: {}", statusCode);
+                             
+                             return response.bodyToMono(String.class)
+                                     .doOnNext(body -> logger.error("GitLab branches API error response body: {}", body))
+                                     .then(Mono.error(new RuntimeException(
+                                         String.format("GitLab branches API error: %d %s", statusCode, 
+                                                      getStatusMessage(statusCode)))));
+                         })
                 .bodyToMono(GitLabBranchResponse[].class)
                 .timeout(Duration.ofSeconds(30))
                 .doOnSuccess(branches -> logger.info("Successfully fetched {} branches for project {}", 
                                                    branches != null ? branches.length : 0, projectId))
                 .doOnError(error -> logger.error("Failed to fetch branches for project {}: {}", projectId, error.getMessage()));
+    }
+    
+    private String getStatusMessage(int statusCode) {
+        switch (statusCode) {
+            case 401:
+                return "Unauthorized - Invalid or expired access token";
+            case 403:
+                return "Forbidden - Insufficient permissions";
+            case 404:
+                return "Not Found - Project does not exist or no access";
+            case 429:
+                return "Too Many Requests - Rate limit exceeded";
+            case 500:
+                return "Internal Server Error - GitLab server error";
+            case 502:
+                return "Bad Gateway - GitLab server unavailable";
+            case 503:
+                return "Service Unavailable - GitLab server temporarily unavailable";
+            default:
+                return "Unknown error";
+        }
     }
 
     // Inner classes for GitLab API request/response

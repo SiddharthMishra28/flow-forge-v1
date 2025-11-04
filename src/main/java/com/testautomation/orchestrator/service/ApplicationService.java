@@ -182,9 +182,40 @@ public class ApplicationService {
         Application application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + applicationId));
         
+        logger.debug("Found application: {}, Project ID: {}, Token Status: {}", 
+                    application.getApplicationName(), application.getGitlabProjectId(), application.getTokenStatus());
+        
+        // Check if the token is active
+        if (application.getTokenStatus() != null && 
+            !application.getTokenStatus().name().equals("ACTIVE")) {
+            logger.warn("Application {} has inactive token status: {}", 
+                       applicationId, application.getTokenStatus());
+            throw new RuntimeException("Application token is not active. Current status: " + application.getTokenStatus());
+        }
+        
         try {
+            // Decrypt the personal access token
             String decryptedToken = encryptionService.decrypt(application.getPersonalAccessToken());
+            logger.debug("Successfully decrypted access token for application ID: {}", applicationId);
             
+            // Log the GitLab configuration being used
+            logger.debug("Using GitLab base URL: {}, Project ID: {}", 
+                        gitLabConfig.getBaseUrl(), application.getGitlabProjectId());
+            
+            // First validate that the token works by checking project access
+            logger.debug("Validating GitLab connection before fetching branches...");
+            GitLabApiClient.GitLabProjectResponse projectValidation = gitLabApiClient
+                .validateConnection(gitLabConfig.getBaseUrl(), application.getGitlabProjectId(), decryptedToken)
+                .block();
+            
+            if (projectValidation == null) {
+                logger.error("GitLab project validation returned null for application ID: {}", applicationId);
+                throw new RuntimeException("Unable to validate GitLab project access");
+            }
+            
+            logger.debug("GitLab project validation successful for: {}", projectValidation.getName());
+            
+            // Now fetch the branches
             GitLabApiClient.GitLabBranchResponse[] branchResponses = gitLabApiClient
                 .getProjectBranches(gitLabConfig.getBaseUrl(), application.getGitlabProjectId(), decryptedToken)
                 .block(); // Blocking call for synchronous response
@@ -200,15 +231,15 @@ public class ApplicationService {
                 return List.of();
             }
         } catch (Exception e) {
-            logger.error("Failed to fetch branches for application ID {}: {}", applicationId, e.getMessage());
+            logger.error("Failed to fetch branches for application ID {}: {}", applicationId, e.getMessage(), e);
             
             String errorMessage = "Failed to fetch branches";
             if (e.getMessage() != null) {
-                if (e.getMessage().contains("401")) {
+                if (e.getMessage().contains("401") || e.getMessage().contains("Unauthorized")) {
                     errorMessage = "Invalid access token or insufficient permissions";
-                } else if (e.getMessage().contains("403")) {
+                } else if (e.getMessage().contains("403") || e.getMessage().contains("Forbidden")) {
                     errorMessage = "Access forbidden - check token permissions";
-                } else if (e.getMessage().contains("404")) {
+                } else if (e.getMessage().contains("404") || e.getMessage().contains("Not Found")) {
                     errorMessage = "Project not found or access denied";
                 } else if (e.getMessage().contains("timeout") || e.getMessage().contains("TimeoutException")) {
                     errorMessage = "Connection timeout - GitLab server may be unreachable";
