@@ -675,6 +675,29 @@ public class FlowExecutionService {
         dto.setTestDataIds(entity.getTestDataIds());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
+        
+        // Handle optional invokeScheduler
+        if (entity.getInvokeScheduler() != null) {
+            dto.setInvokeScheduler(convertInvokeSchedulerEntityToDto(entity.getInvokeScheduler()));
+        }
+        
+        return dto;
+    }
+
+    private com.testautomation.orchestrator.dto.InvokeSchedulerDto convertInvokeSchedulerEntityToDto(com.testautomation.orchestrator.model.InvokeScheduler entity) {
+        if (entity == null) return null;
+        
+        com.testautomation.orchestrator.dto.InvokeSchedulerDto dto = new com.testautomation.orchestrator.dto.InvokeSchedulerDto();
+        dto.setType(entity.getType());
+        
+        if (entity.getTimer() != null) {
+            com.testautomation.orchestrator.dto.TimerDto timerDto = new com.testautomation.orchestrator.dto.TimerDto();
+            timerDto.setMinutes(entity.getTimer().getMinutes());
+            timerDto.setHours(entity.getTimer().getHours());
+            timerDto.setDays(entity.getTimer().getDays());
+            dto.setTimer(timerDto);
+        }
+        
         return dto;
     }
 

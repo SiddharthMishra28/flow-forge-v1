@@ -40,7 +40,7 @@ public class CombinedFlowStepDto {
     
     @Valid
     @ValidInvokeScheduler
-    @Schema(description = "Scheduler configuration for scheduling or delaying step execution")
+    @Schema(description = "Optional scheduler configuration for scheduling or delaying step execution")
     private InvokeSchedulerDto invokeScheduler;
     
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")

@@ -1,2 +1,3 @@
+com\testautomation\orchestrator\service\FlowStepNullableSchedulerTest.class
 com\testautomation\orchestrator\PipelineOrchestratorApplicationTests.class
 com\testautomation\orchestrator\util\OutputEnvParserTest.class

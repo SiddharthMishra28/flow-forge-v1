@@ -30,6 +30,9 @@ public class FlowStepDto {
     private List<Long> squashStepIds;
     private List<Long> testDataIds;
     
+    @Schema(description = "Optional scheduler configuration for scheduling or delaying step execution")
+    private InvokeSchedulerDto invokeScheduler;
+    
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
     
@@ -40,13 +43,14 @@ public class FlowStepDto {
     public FlowStepDto() {}
 
     public FlowStepDto(Long applicationId, String branch, String testTag, String testStage,
-                      List<Long> squashStepIds, List<Long> testDataIds) {
+                      List<Long> squashStepIds, List<Long> testDataIds, InvokeSchedulerDto invokeScheduler) {
         this.applicationId = applicationId;
         this.branch = branch;
         this.testTag = testTag;
         this.testStage = testStage;
         this.squashStepIds = squashStepIds;
         this.testDataIds = testDataIds;
+        this.invokeScheduler = invokeScheduler;
     }
 
     // Getters and Setters
@@ -120,5 +124,13 @@ public class FlowStepDto {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public InvokeSchedulerDto getInvokeScheduler() {
+        return invokeScheduler;
+    }
+
+    public void setInvokeScheduler(InvokeSchedulerDto invokeScheduler) {
+        this.invokeScheduler = invokeScheduler;
     }
 }
