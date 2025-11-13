@@ -20,6 +20,8 @@ public interface FlowExecutionRepository extends JpaRepository<FlowExecution, UU
     
     Page<FlowExecution> findByFlowId(Long flowId, Pageable pageable);
     
+    Page<FlowExecution> findByFlowIdIn(List<Long> flowIds, Pageable pageable);
+    
     List<FlowExecution> findByStatus(ExecutionStatus status);
     
     List<FlowExecution> findByFlowIdAndStatus(Long flowId, ExecutionStatus status);

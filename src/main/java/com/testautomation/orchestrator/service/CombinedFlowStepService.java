@@ -1,6 +1,7 @@
 package com.testautomation.orchestrator.service;
 
 import com.testautomation.orchestrator.dto.CombinedFlowStepDto;
+import com.testautomation.orchestrator.dto.FlowStepCreateDto;
 import com.testautomation.orchestrator.dto.TestDataDto;
 import com.testautomation.orchestrator.model.FlowStep;
 import com.testautomation.orchestrator.repository.ApplicationRepository;
@@ -36,6 +37,87 @@ public class CombinedFlowStepService {
 
     @Autowired
     private TestDataService testDataService;
+
+    public CombinedFlowStepDto createFlowStepFromCreateDto(FlowStepCreateDto flowStepCreateDto) {
+        logger.info("Creating new flow step from create DTO for application ID: {}", flowStepCreateDto.getApplicationId());
+        
+        // Validate that the application exists
+        if (!applicationRepository.existsById(flowStepCreateDto.getApplicationId())) {
+            throw new IllegalArgumentException("Application not found with ID: " + flowStepCreateDto.getApplicationId());
+        }
+        
+        // Validate test data IDs exist
+        if (flowStepCreateDto.getTestData() != null && !flowStepCreateDto.getTestData().isEmpty()) {
+            for (Long testDataId : flowStepCreateDto.getTestData()) {
+                if (!testDataRepository.existsByDataId(testDataId)) {
+                    throw new IllegalArgumentException("Test data not found with ID: " + testDataId);
+                }
+            }
+        }
+        
+        // Create flow step
+        FlowStep flowStep = new FlowStep();
+        flowStep.setApplicationId(flowStepCreateDto.getApplicationId());
+        flowStep.setBranch(flowStepCreateDto.getBranch());
+        flowStep.setTestTag(flowStepCreateDto.getTestTag());
+        flowStep.setTestStage(flowStepCreateDto.getTestStage());
+        flowStep.setDescription(flowStepCreateDto.getDescription());
+        flowStep.setSquashStepIds(flowStepCreateDto.getSquashStepIds());
+        flowStep.setTestDataIds(flowStepCreateDto.getTestData() != null ? flowStepCreateDto.getTestData() : new ArrayList<>());
+        
+        // Handle optional invokeScheduler
+        if (flowStepCreateDto.getInvokeScheduler() != null) {
+            flowStep.setInvokeScheduler(convertInvokeSchedulerDtoToEntity(flowStepCreateDto.getInvokeScheduler()));
+        }
+        
+        FlowStep savedFlowStep = flowStepRepository.save(flowStep);
+        
+        logger.info("Flow step created with ID: {}", savedFlowStep.getId());
+        return convertToDto(savedFlowStep);
+    }
+
+    public CombinedFlowStepDto updateFlowStepFromCreateDto(Long id, FlowStepCreateDto flowStepCreateDto) {
+        logger.info("Updating flow step with ID: {} from create DTO", id);
+        
+        FlowStep existingFlowStep = flowStepRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + id));
+        
+        // Validate that the application exists if it's being changed
+        if (!existingFlowStep.getApplicationId().equals(flowStepCreateDto.getApplicationId()) &&
+            !applicationRepository.existsById(flowStepCreateDto.getApplicationId())) {
+            throw new IllegalArgumentException("Application not found with ID: " + flowStepCreateDto.getApplicationId());
+        }
+        
+        // Validate test data IDs exist
+        if (flowStepCreateDto.getTestData() != null && !flowStepCreateDto.getTestData().isEmpty()) {
+            for (Long testDataId : flowStepCreateDto.getTestData()) {
+                if (!testDataRepository.existsByDataId(testDataId)) {
+                    throw new IllegalArgumentException("Test data not found with ID: " + testDataId);
+                }
+            }
+        }
+        
+        // Update flow step (don't delete test data - just unlink)
+        existingFlowStep.setApplicationId(flowStepCreateDto.getApplicationId());
+        existingFlowStep.setBranch(flowStepCreateDto.getBranch());
+        existingFlowStep.setTestTag(flowStepCreateDto.getTestTag());
+        existingFlowStep.setTestStage(flowStepCreateDto.getTestStage());
+        existingFlowStep.setDescription(flowStepCreateDto.getDescription());
+        existingFlowStep.setSquashStepIds(flowStepCreateDto.getSquashStepIds());
+        existingFlowStep.setTestDataIds(flowStepCreateDto.getTestData() != null ? flowStepCreateDto.getTestData() : new ArrayList<>());
+        
+        // Handle optional invokeScheduler
+        if (flowStepCreateDto.getInvokeScheduler() != null) {
+            existingFlowStep.setInvokeScheduler(convertInvokeSchedulerDtoToEntity(flowStepCreateDto.getInvokeScheduler()));
+        } else {
+            existingFlowStep.setInvokeScheduler(null);
+        }
+        
+        FlowStep updatedFlowStep = flowStepRepository.save(existingFlowStep);
+        
+        logger.info("Flow step updated successfully with ID: {}", updatedFlowStep.getId());
+        return convertToDto(updatedFlowStep);
+    }
 
     public CombinedFlowStepDto createFlowStep(CombinedFlowStepDto flowStepDto) {
         logger.info("Creating new flow step for application ID: {}", flowStepDto.getApplicationId());
@@ -156,13 +238,9 @@ public class CombinedFlowStepService {
         FlowStep flowStep = flowStepRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + id));
         
-        // Delete associated test data
-        if (flowStep.getTestDataIds() != null && !flowStep.getTestDataIds().isEmpty()) {
-            testDataRepository.deleteByDataIdIn(flowStep.getTestDataIds());
-        }
-        
+        // Only delete flow step - test data remains in the database (just unlinked)
         flowStepRepository.deleteById(id);
-        logger.info("Flow step deleted successfully with ID: {}", id);
+        logger.info("Flow step deleted successfully with ID: {} (test data was unlinked, not deleted)", id);
     }
 
     private List<Long> createTestDataEntries(List<TestDataDto> testDataDtoList) {

@@ -1,6 +1,7 @@
 package com.testautomation.orchestrator.controller;
 
 import com.testautomation.orchestrator.dto.CombinedFlowDto;
+import com.testautomation.orchestrator.dto.FlowCreateDto;
 import com.testautomation.orchestrator.dto.FlowTestCaseAssociationDto;
 import com.testautomation.orchestrator.service.CombinedFlowService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,17 +34,17 @@ public class FlowController {
     private CombinedFlowService combinedFlowService;
 
     @PostMapping
-    @Operation(summary = "Create a new flow", description = "Create a new test automation flow with embedded flow steps and test data")
+    @Operation(summary = "Create a new flow", description = "Create a new test automation flow with flow steps referencing existing test data by IDs")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Flow created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data or referenced applications not found")
+            @ApiResponse(responseCode = "400", description = "Invalid input data or referenced applications/test data not found")
     })
     public ResponseEntity<CombinedFlowDto> createFlow(
-            @Valid @RequestBody CombinedFlowDto combinedFlowDto) {
-        logger.info("Creating new combined flow with {} steps", combinedFlowDto.getFlowSteps().size());
+            @Valid @RequestBody FlowCreateDto flowCreateDto) {
+        logger.info("Creating new flow with {} steps", flowCreateDto.getFlowSteps().size());
         
         try {
-            CombinedFlowDto createdFlow = combinedFlowService.createCombinedFlow(combinedFlowDto);
+            CombinedFlowDto createdFlow = combinedFlowService.createFlowFromCreateDto(flowCreateDto);
             return new ResponseEntity<>(createdFlow, HttpStatus.CREATED);
         } catch (IllegalArgumentException e) {
             logger.error("Failed to create flow: {}", e.getMessage());
@@ -132,19 +133,19 @@ public class FlowController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Update flow", description = "Update an existing flow with embedded flow steps and test data")
+    @Operation(summary = "Update flow", description = "Update an existing flow with flow steps referencing existing test data by IDs")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Flow updated successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data or referenced applications not found"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data or referenced applications/test data not found"),
             @ApiResponse(responseCode = "404", description = "Flow not found")
     })
     public ResponseEntity<CombinedFlowDto> updateFlow(
             @Parameter(description = "Flow ID") @PathVariable Long id,
-            @Valid @RequestBody CombinedFlowDto combinedFlowDto) {
-        logger.info("Updating combined flow with ID: {}", id);
+            @Valid @RequestBody FlowCreateDto flowCreateDto) {
+        logger.info("Updating flow with ID: {}", id);
         
         try {
-            CombinedFlowDto updatedFlow = combinedFlowService.updateCombinedFlow(id, combinedFlowDto);
+            CombinedFlowDto updatedFlow = combinedFlowService.updateFlowFromCreateDto(id, flowCreateDto);
             return ResponseEntity.ok(updatedFlow);
         } catch (IllegalArgumentException e) {
             logger.error("Failed to update flow: {}", e.getMessage());

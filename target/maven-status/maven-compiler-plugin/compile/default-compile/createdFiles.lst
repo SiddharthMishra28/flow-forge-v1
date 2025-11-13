@@ -17,6 +17,7 @@ com\testautomation\orchestrator\exception\GlobalExceptionHandler$ErrorResponse.c
 com\testautomation\orchestrator\repository\FlowExecutionRepository.class
 com\testautomation\orchestrator\controller\ApplicationController.class
 com\testautomation\orchestrator\controller\AnalyticsController.class
+com\testautomation\orchestrator\dto\FlowCreateDto.class
 com\testautomation\orchestrator\config\GitLabConfig.class
 com\testautomation\orchestrator\util\GitLabApiClient$GitLabProjectResponse.class
 com\testautomation\orchestrator\controller\PipelineExecutionController.class
@@ -29,6 +30,7 @@ com\testautomation\orchestrator\model\InvokeTimer.class
 com\testautomation\orchestrator\validator\ValidInvokeScheduler.class
 com\testautomation\orchestrator\model\Flow.class
 com\testautomation\orchestrator\util\GitLabApiClient.class
+com\testautomation\orchestrator\dto\FlowStepCreateDto.class
 com\testautomation\orchestrator\dto\TestDataDto.class
 com\testautomation\orchestrator\controller\FlowStepController.class
 com\testautomation\orchestrator\dto\CombinedFlowStepDto.class

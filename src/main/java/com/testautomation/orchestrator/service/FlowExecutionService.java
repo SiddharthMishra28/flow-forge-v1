@@ -9,15 +9,20 @@ import com.testautomation.orchestrator.util.OutputEnvParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Collectors;
 
 @Service
@@ -56,6 +61,163 @@ public class FlowExecutionService {
     @Autowired
     private com.testautomation.orchestrator.config.GitLabConfig gitLabConfig;
 
+    @Autowired(required = false)
+    @Qualifier("flowExecutionTaskExecutor")
+    private ThreadPoolTaskExecutor flowExecutionTaskExecutor;
+
+    public Map<String, Object> executeMultipleFlows(String flowIdsParam) {
+        logger.info("Processing multiple flow execution request: {}", flowIdsParam);
+        
+        // Parse and validate flow IDs
+        List<Long> flowIds = parseAndValidateFlowIds(flowIdsParam);
+        
+        // Get current thread pool status (handle test environment where executor might be null)
+        int activeThreads = 0;
+        int maxThreads = 20; // default
+        int queueSize = 0;
+        int availableCapacity = 20; // default
+        
+        if (flowExecutionTaskExecutor != null) {
+            activeThreads = flowExecutionTaskExecutor.getActiveCount();
+            maxThreads = flowExecutionTaskExecutor.getMaxPoolSize();
+            queueSize = flowExecutionTaskExecutor.getThreadPoolExecutor().getQueue().size();
+            availableCapacity = (maxThreads - activeThreads) + 
+                                (flowExecutionTaskExecutor.getThreadPoolExecutor().getQueue().remainingCapacity());
+        } else {
+            logger.warn("ThreadPoolTaskExecutor not available (likely test environment), using default capacity values");
+        }
+        
+        logger.info("Thread pool status - Active: {}, Max: {}, Queue Size: {}, Available Capacity: {}", 
+                   activeThreads, maxThreads, queueSize, availableCapacity);
+        
+        List<Map<String, Object>> accepted = new ArrayList<>();
+        List<Map<String, Object>> rejected = new ArrayList<>();
+        
+        for (int i = 0; i < flowIds.size(); i++) {
+            Long flowId = flowIds.get(i);
+            
+            try {
+                // Check if we have capacity for this flow
+                if (i < availableCapacity) {
+                    // Create flow execution synchronously
+                    FlowExecutionDto executionDto = createFlowExecution(flowId);
+                    
+                    // Start async execution
+                    executeFlowAsync(executionDto.getId());
+                    
+                    Map<String, Object> acceptedFlow = new HashMap<>();
+                    acceptedFlow.put("flowId", flowId);
+                    acceptedFlow.put("executionId", executionDto.getId());
+                    acceptedFlow.put("status", "accepted");
+                    acceptedFlow.put("message", "Flow execution started");
+                    accepted.add(acceptedFlow);
+                    
+                    logger.info("Flow {} accepted for execution with execution ID: {}", flowId, executionDto.getId());
+                } else {
+                    // Reject due to capacity
+                    Map<String, Object> rejectedFlow = new HashMap<>();
+                    rejectedFlow.put("flowId", flowId);
+                    rejectedFlow.put("status", "rejected");
+                    rejectedFlow.put("reason", "thread_pool_capacity");
+                    rejectedFlow.put("message", "Thread pool at capacity, flow execution rejected");
+                    rejected.add(rejectedFlow);
+                    
+                    logger.warn("Flow {} rejected due to thread pool capacity", flowId);
+                }
+            } catch (IllegalArgumentException e) {
+                // Flow not found
+                Map<String, Object> rejectedFlow = new HashMap<>();
+                rejectedFlow.put("flowId", flowId);
+                rejectedFlow.put("status", "rejected");
+                rejectedFlow.put("reason", "flow_not_found");
+                rejectedFlow.put("message", e.getMessage());
+                rejected.add(rejectedFlow);
+                
+                logger.error("Flow {} rejected: {}", flowId, e.getMessage());
+            } catch (Exception e) {
+                // Other errors
+                Map<String, Object> rejectedFlow = new HashMap<>();
+                rejectedFlow.put("flowId", flowId);
+                rejectedFlow.put("status", "rejected");
+                rejectedFlow.put("reason", "execution_error");
+                rejectedFlow.put("message", "Failed to start execution: " + e.getMessage());
+                rejected.add(rejectedFlow);
+                
+                logger.error("Flow {} rejected due to execution error: {}", flowId, e.getMessage());
+            }
+        }
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("summary", Map.of(
+            "total_requested", flowIds.size(),
+            "accepted", accepted.size(),
+            "rejected", rejected.size()
+        ));
+        result.put("accepted", accepted);
+        result.put("rejected", rejected);
+        result.put("thread_pool_status", Map.of(
+            "active_threads", activeThreads,
+            "max_threads", maxThreads,
+            "queue_size", queueSize,
+            "available_capacity", availableCapacity
+        ));
+        
+        logger.info("Multiple flow execution completed - Accepted: {}, Rejected: {}", accepted.size(), rejected.size());
+        return result;
+    }
+
+    public Page<FlowExecutionDto> getMultipleFlowExecutions(String flowIdsParam, Pageable pageable) {
+        logger.debug("Fetching executions for multiple flows: {}", flowIdsParam);
+        
+        // Parse and validate flow IDs
+        List<Long> flowIds = parseAndValidateFlowIds(flowIdsParam);
+        
+        // Get all executions for the specified flows
+        Page<FlowExecution> executionsPage = flowExecutionRepository.findByFlowIdIn(flowIds, pageable);
+        
+        // Convert to DTOs
+        List<FlowExecutionDto> executionDtos = executionsPage.getContent().stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+        
+        logger.debug("Found {} executions for flows: {}", executionDtos.size(), flowIds);
+        
+        return new PageImpl<>(executionDtos, pageable, executionsPage.getTotalElements());
+    }
+
+    private List<Long> parseAndValidateFlowIds(String flowIdsParam) {
+        if (flowIdsParam == null || flowIdsParam.trim().isEmpty()) {
+            throw new IllegalArgumentException("Flow IDs parameter cannot be empty");
+        }
+        
+        List<Long> flowIds = new ArrayList<>();
+        String[] idStrings = flowIdsParam.split(",");
+        
+        for (String idString : idStrings) {
+            try {
+                Long flowId = Long.parseLong(idString.trim());
+                if (flowId <= 0) {
+                    throw new IllegalArgumentException("Flow ID must be a positive number: " + flowId);
+                }
+                flowIds.add(flowId);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid flow ID format: " + idString.trim());
+            }
+        }
+        
+        if (flowIds.isEmpty()) {
+            throw new IllegalArgumentException("No valid flow IDs provided");
+        }
+        
+        // Remove duplicates while preserving order
+        List<Long> uniqueFlowIds = flowIds.stream().distinct().collect(Collectors.toList());
+        
+        if (uniqueFlowIds.size() != flowIds.size()) {
+            logger.info("Removed {} duplicate flow IDs from request", flowIds.size() - uniqueFlowIds.size());
+        }
+        
+        return uniqueFlowIds;
+    }
 
     public FlowExecutionDto createFlowExecution(Long flowId) {
         logger.info("Creating flow execution for flow ID: {}", flowId);

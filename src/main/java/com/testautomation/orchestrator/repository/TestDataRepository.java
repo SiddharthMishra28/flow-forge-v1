@@ -14,4 +14,6 @@ public interface TestDataRepository extends JpaRepository<TestData, Long> {
     List<TestData> findByApplicationId(Long applicationId);
     
     void deleteByDataIdIn(List<Long> dataIds);
+    
+    boolean existsByDataId(Long dataId);
 }

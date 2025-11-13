@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -57,6 +58,106 @@ public class FlowExecutionController {
         } catch (Exception e) {
             logger.error("Unexpected error starting flow execution: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @PostMapping("/flows/execute")
+    @Operation(summary = "Execute multiple flows", description = "Trigger execution of multiple flows at once with thread pool management")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "202", description = "Flow executions started successfully (all or partial)"),
+            @ApiResponse(responseCode = "400", description = "Invalid flow IDs provided"),
+            @ApiResponse(responseCode = "503", description = "Thread pool at capacity - some flows rejected")
+    })
+    public ResponseEntity<?> executeMultipleFlows(
+            @Parameter(description = "Comma-separated flow IDs to execute", example = "1,2,3") 
+            @RequestParam("trigger") String flowIds) {
+        logger.info("Starting execution of multiple flows: {}", flowIds);
+        
+        try {
+            Map<String, Object> result = flowExecutionService.executeMultipleFlows(flowIds);
+            
+            // Check if any flows were rejected due to capacity
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rejected = (List<Map<String, Object>>) result.get("rejected");
+            
+            if (rejected != null && !rejected.isEmpty()) {
+                // Some flows were rejected due to thread pool capacity
+                return new ResponseEntity<>(result, HttpStatus.SERVICE_UNAVAILABLE);
+            } else {
+                // All flows accepted for execution
+                return new ResponseEntity<>(result, HttpStatus.ACCEPTED);
+            }
+        } catch (IllegalArgumentException e) {
+            logger.error("Failed to start multiple flow executions: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Unexpected error starting multiple flow executions: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Internal server error"));
+        }
+    }
+
+    @GetMapping("/flows/executions")
+    @Operation(summary = "Get multiple flow executions", description = "Get execution data for multiple flows. Supports pagination and sorting.")
+    @ApiResponse(responseCode = "200", description = "Flow executions retrieved successfully")
+    public ResponseEntity<?> getMultipleFlowExecutions(
+            @Parameter(description = "Comma-separated flow IDs to get executions for", example = "1,2,3") 
+            @RequestParam("triggered") String flowIds,
+            @Parameter(description = "Page number (0-based)") @RequestParam(required = false) Integer page,
+            @Parameter(description = "Page size") @RequestParam(required = false) Integer size,
+            @Parameter(description = "Sort by field (e.g., 'startTime', 'endTime', 'status', 'createdAt')") @RequestParam(required = false) String sortBy,
+            @Parameter(description = "Sort direction (ASC or DESC)") @RequestParam(required = false, defaultValue = "DESC") String sortDirection) {
+        
+        logger.debug("Fetching executions for multiple flows: {} with page: {}, size: {}, sortBy: {}, sortDirection: {}", 
+                    flowIds, page, size, sortBy, sortDirection);
+        
+        try {
+            // If pagination parameters are provided, use pagination
+            if (page != null || size != null) {
+                int pageNumber = page != null ? page : 0;
+                int pageSize = size != null ? size : 20; // default page size
+                
+                Sort sort;
+                if (sortBy != null && !sortBy.trim().isEmpty()) {
+                    // Use provided sort field and direction
+                    Sort.Direction direction = sortDirection != null ? 
+                        Sort.Direction.fromString(sortDirection) : Sort.Direction.DESC;
+                    sort = Sort.by(direction, sortBy);
+                } else {
+                    // Default sort: startTime DESC (most recent first)
+                    sort = Sort.by(Sort.Direction.DESC, "startTime");
+                }
+                
+                Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
+                Page<FlowExecutionDto> executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
+                
+                return ResponseEntity.ok(executionsPage);
+            } else {
+                // Return all data without pagination (backward compatibility)
+                // Apply default sorting (startTime DESC) even without pagination
+                Sort sort;
+                if (sortBy != null && !sortBy.trim().isEmpty()) {
+                    // Use provided sort field and direction
+                    Sort.Direction direction = sortDirection != null ? 
+                        Sort.Direction.fromString(sortDirection) : Sort.Direction.DESC;
+                    sort = Sort.by(direction, sortBy);
+                } else {
+                    // Default sort: startTime DESC
+                    sort = Sort.by(Sort.Direction.DESC, "startTime");
+                }
+                
+                Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sort);
+                Page<FlowExecutionDto> executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
+                
+                return ResponseEntity.ok(executionsPage.getContent());
+            }
+        } catch (IllegalArgumentException e) {
+            logger.error("Failed to get multiple flow executions: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Unexpected error getting multiple flow executions: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Internal server error"));
         }
     }
 
