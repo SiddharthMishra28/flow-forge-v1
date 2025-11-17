@@ -90,60 +90,33 @@ public class FlowExecutionService {
         logger.info("Thread pool status - Active: {}, Max: {}, Queue Size: {}, Available Capacity: {}", 
                    activeThreads, maxThreads, queueSize, availableCapacity);
         
+        // Create executions and start them asynchronously - return immediately
+        executeMultipleFlowsAsync(flowIds, availableCapacity);
+        
+        // Return immediate response with the flow IDs that will be processed
         List<Map<String, Object>> accepted = new ArrayList<>();
         List<Map<String, Object>> rejected = new ArrayList<>();
         
         for (int i = 0; i < flowIds.size(); i++) {
             Long flowId = flowIds.get(i);
             
-            try {
-                // Check if we have capacity for this flow
-                if (i < availableCapacity) {
-                    // Create flow execution synchronously
-                    FlowExecutionDto executionDto = createFlowExecution(flowId);
-                    
-                    // Start async execution
-                    executeFlowAsync(executionDto.getId());
-                    
-                    Map<String, Object> acceptedFlow = new HashMap<>();
-                    acceptedFlow.put("flowId", flowId);
-                    acceptedFlow.put("executionId", executionDto.getId());
-                    acceptedFlow.put("status", "accepted");
-                    acceptedFlow.put("message", "Flow execution started");
-                    accepted.add(acceptedFlow);
-                    
-                    logger.info("Flow {} accepted for execution with execution ID: {}", flowId, executionDto.getId());
-                } else {
-                    // Reject due to capacity
-                    Map<String, Object> rejectedFlow = new HashMap<>();
-                    rejectedFlow.put("flowId", flowId);
-                    rejectedFlow.put("status", "rejected");
-                    rejectedFlow.put("reason", "thread_pool_capacity");
-                    rejectedFlow.put("message", "Thread pool at capacity, flow execution rejected");
-                    rejected.add(rejectedFlow);
-                    
-                    logger.warn("Flow {} rejected due to thread pool capacity", flowId);
-                }
-            } catch (IllegalArgumentException e) {
-                // Flow not found
+            if (i < availableCapacity) {
+                Map<String, Object> acceptedFlow = new HashMap<>();
+                acceptedFlow.put("flowId", flowId);
+                acceptedFlow.put("status", "accepted");
+                acceptedFlow.put("message", "Flow execution started");
+                accepted.add(acceptedFlow);
+                
+                logger.info("Flow {} accepted for async execution", flowId);
+            } else {
                 Map<String, Object> rejectedFlow = new HashMap<>();
                 rejectedFlow.put("flowId", flowId);
                 rejectedFlow.put("status", "rejected");
-                rejectedFlow.put("reason", "flow_not_found");
-                rejectedFlow.put("message", e.getMessage());
+                rejectedFlow.put("reason", "thread_pool_capacity");
+                rejectedFlow.put("message", "Thread pool at capacity, flow execution rejected");
                 rejected.add(rejectedFlow);
                 
-                logger.error("Flow {} rejected: {}", flowId, e.getMessage());
-            } catch (Exception e) {
-                // Other errors
-                Map<String, Object> rejectedFlow = new HashMap<>();
-                rejectedFlow.put("flowId", flowId);
-                rejectedFlow.put("status", "rejected");
-                rejectedFlow.put("reason", "execution_error");
-                rejectedFlow.put("message", "Failed to start execution: " + e.getMessage());
-                rejected.add(rejectedFlow);
-                
-                logger.error("Flow {} rejected due to execution error: {}", flowId, e.getMessage());
+                logger.warn("Flow {} rejected due to thread pool capacity", flowId);
             }
         }
         
@@ -162,8 +135,40 @@ public class FlowExecutionService {
             "available_capacity", availableCapacity
         ));
         
-        logger.info("Multiple flow execution completed - Accepted: {}, Rejected: {}", accepted.size(), rejected.size());
+        logger.info("Multiple flow execution request processed immediately - Accepted: {}, Rejected: {}", accepted.size(), rejected.size());
         return result;
+    }
+
+    @Async("flowExecutionTaskExecutor")
+    public void executeMultipleFlowsAsync(List<Long> flowIds, int availableCapacity) {
+        logger.info("Starting async execution of {} flows", flowIds.size());
+        
+        for (int i = 0; i < flowIds.size(); i++) {
+            Long flowId = flowIds.get(i);
+            
+            // Only process flows within capacity (those marked as accepted)
+            if (i >= availableCapacity) {
+                logger.debug("Skipping flow {} - beyond capacity limit", flowId);
+                break;
+            }
+            
+            try {
+                // Create flow execution synchronously
+                FlowExecutionDto executionDto = createFlowExecution(flowId);
+                
+                // Start async execution
+                executeFlowAsync(executionDto.getId());
+                
+                logger.info("Flow {} started with execution ID: {}", flowId, executionDto.getId());
+                
+            } catch (IllegalArgumentException e) {
+                logger.error("Flow {} rejected during async processing: {}", flowId, e.getMessage());
+            } catch (Exception e) {
+                logger.error("Flow {} failed to start during async processing: {}", flowId, e.getMessage());
+            }
+        }
+        
+        logger.info("Async multiple flow execution processing completed");
     }
 
     public Page<FlowExecutionDto> getMultipleFlowExecutions(String flowIdsParam, Pageable pageable) {

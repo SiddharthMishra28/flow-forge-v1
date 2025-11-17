@@ -62,9 +62,9 @@ public class FlowExecutionController {
     }
 
     @PostMapping("/flows/execute")
-    @Operation(summary = "Execute multiple flows", description = "Trigger execution of multiple flows at once with thread pool management")
+    @Operation(summary = "Execute multiple flows", description = "Trigger execution of multiple flows asynchronously with immediate response")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "202", description = "Flow executions started successfully (all or partial)"),
+            @ApiResponse(responseCode = "202", description = "Flow executions started successfully (all or partial) - returns immediately like single flow execution"),
             @ApiResponse(responseCode = "400", description = "Invalid flow IDs provided"),
             @ApiResponse(responseCode = "503", description = "Thread pool at capacity - some flows rejected")
     })
