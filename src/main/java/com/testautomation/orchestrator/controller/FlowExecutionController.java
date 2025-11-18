@@ -62,9 +62,9 @@ public class FlowExecutionController {
     }
 
     @PostMapping("/flows/execute")
-    @Operation(summary = "Execute multiple flows", description = "Trigger execution of multiple flows asynchronously with immediate response")
+    @Operation(summary = "Execute multiple flows", description = "Trigger execution of multiple flows asynchronously with immediate response. Returns FlowExecutionDto objects for accepted flows, just like single flow execution.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "202", description = "Flow executions started successfully (all or partial) - returns immediately like single flow execution"),
+            @ApiResponse(responseCode = "202", description = "Flow executions started successfully (all or partial) - returns FlowExecutionDto objects for accepted flows with RUNNING status"),
             @ApiResponse(responseCode = "400", description = "Invalid flow IDs provided"),
             @ApiResponse(responseCode = "503", description = "Thread pool at capacity - some flows rejected")
     })
@@ -76,12 +76,23 @@ public class FlowExecutionController {
         try {
             Map<String, Object> result = flowExecutionService.executeMultipleFlows(flowIds);
             
+            // Start async execution for all accepted flows - this happens after we have the response ready
+            @SuppressWarnings("unchecked")
+            List<FlowExecutionDto> acceptedExecutions = (List<FlowExecutionDto>) result.get("accepted");
+            if (acceptedExecutions != null) {
+                for (FlowExecutionDto executionDto : acceptedExecutions) {
+                    flowExecutionService.executeFlowAsync(executionDto.getId());
+                    logger.info("Started async execution for flow ID: {} with execution ID: {}", 
+                               executionDto.getFlowId(), executionDto.getId());
+                }
+            }
+            
             // Check if any flows were rejected due to capacity
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> rejected = (List<Map<String, Object>>) result.get("rejected");
             
             if (rejected != null && !rejected.isEmpty()) {
-                // Some flows were rejected due to thread pool capacity
+                // Some flows were rejected due to thread pool capacity or other reasons
                 return new ResponseEntity<>(result, HttpStatus.SERVICE_UNAVAILABLE);
             } else {
                 // All flows accepted for execution
