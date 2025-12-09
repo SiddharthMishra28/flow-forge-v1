@@ -37,6 +37,12 @@ public class PipelineExecution {
     @Column(name = "pipeline_url")
     private String pipelineUrl;
 
+    @Column(name = "job_id")
+    private Long jobId;
+
+    @Column(name = "job_url")
+    private String jobUrl;
+
     @Column(name = "start_time")
     private LocalDateTime startTime;
 
@@ -129,6 +135,22 @@ public class PipelineExecution {
 
     public void setPipelineUrl(String pipelineUrl) {
         this.pipelineUrl = pipelineUrl;
+    }
+
+    public Long getJobId() {
+        return jobId;
+    }
+
+    public void setJobId(Long jobId) {
+        this.jobId = jobId;
+    }
+
+    public String getJobUrl() {
+        return jobUrl;
+    }
+
+    public void setJobUrl(String jobUrl) {
+        this.jobUrl = jobUrl;
     }
 
     public LocalDateTime getStartTime() {

@@ -1,0 +1,5 @@
+# Created at 2025-11-04T21:06:46.337
+Boot Manifest-JAR contains absolute paths in classpath 'D:\vibe\flow-forge-v1 - before suites - with branch\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+

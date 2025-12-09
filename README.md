@@ -24,7 +24,7 @@ FlowForge is built on a modular, scalable architecture designed for high perform
 
 1.  **Application**: Represents a GitLab project, including its access credentials (personal access token). This is the primary entity for which flows are defined.
 2.  **TestData**: A flexible key-value store for test data associated with an `Application` and `applicationName`. Each `TestData` entity can be categorized for better organization (e.g., `API_CREDENTIALS`, `USER_PROFILES`).
-3.  **FlowStep**: An individual, executable step within a flow. It is linked to an `Application` and defines the GitLab pipeline branch, test tag, test stage, and optional timer configuration for delayed execution.
+3.  **FlowStep**: An individual, executable step within a flow. It is linked to an `Application` and defines the GitLab pipeline branch, test tag, test stage, and optional timer configuration for delayed execution. The `testTag` value is injected as a `testTag` environment variable in the GitLab pipeline.
 4.  **Flow**: An ordered sequence of `FlowSteps` that represents a complete E2E test scenario with squash test case integration (`squashTestCaseId` and `squashTestCase`).
 5.  **FlowExecution**: A runtime instance of a `Flow`, capturing its state (`RUNNING`, `PASSED`, `FAILED`, `SCHEDULED`), start/end times, and the aggregated runtime variables.
 6.  **PipelineExecution**: Represents the execution of a single GitLab pipeline within a `FlowExecution`, tracking its status, scheduled resume time, and associated logs.
@@ -302,7 +302,50 @@ POST /api/flows/execute?trigger=1,2,3,4,5
 
 ### **🔥 Major Feature Additions**
 
-#### **1. Enhanced Flow Management with Test Data References**
+#### **1. Environment Variable Naming Standardization**
+
+**Problem Solved:** GitLab pipeline environment variables were using inconsistent naming conventions.
+
+**Changes Made:**
+- Standardized `testTag` from FlowStep to be injected as lowercase `testTag` environment variable in GitLab pipelines
+- Ensures proper case-sensitive variable access in CI/CD scripts
+
+**Impact:** Test tags are now accessible as `$testTag` in GitLab CI/CD pipelines for dynamic test filtering and execution.
+
+#### **2. Application Token Validation Tracking**
+
+**Problem Solved:** No way to track when token validation was last performed on applications.
+
+**Changes Made:**
+- Added `tokenValidationLastUpdateDate` field to Application model and DTOs
+- TokenValidationScheduler now updates this timestamp after each validation cycle
+- Repository enhanced with bulk update method for efficient timestamp management
+
+**Impact:** Applications now track their last token validation timestamp, enabling better monitoring and security compliance.
+
+#### **3. Enhanced Flow Execution Response Details**
+
+**Problem Solved:** Flow execution endpoints returned incomplete nested object information.
+
+**Changes Made:**
+- Updated `/api/flows/executions` endpoint to return complete flow execution details with all nested objects
+- Fixed missing `squashTestCase` field in flow execution responses
+- Enhanced response data for better API consumption
+
+**Impact:** Flow execution queries now provide comprehensive information including complete flow, flowSteps, applications, and pipelineExecutions data.
+
+#### **4. Pipeline Execution Job Tracking**
+
+**Problem Solved:** Pipeline executions lacked direct links to specific GitLab jobs that generate artifacts.
+
+**Changes Made:**
+- Added `jobId` and `jobUrl` fields to PipelineExecution model and DTOs
+- Enhanced artifact download process to capture and store job information for the job matching `testStage`
+- Pipeline executions now include direct links to relevant GitLab jobs
+
+**Impact:** Users can now directly navigate to specific GitLab jobs that generate `output.env` artifacts, improving debugging and monitoring capabilities.
+
+#### **5. Enhanced Flow Management with Test Data References**
 
 **Problem Solved:** Eliminated test data duplication in flow creation/update operations while maintaining UI-friendly responses.
 

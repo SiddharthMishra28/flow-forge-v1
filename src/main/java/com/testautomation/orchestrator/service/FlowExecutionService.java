@@ -148,20 +148,20 @@ public class FlowExecutionService {
 
     public Page<FlowExecutionDto> getMultipleFlowExecutions(String flowIdsParam, Pageable pageable) {
         logger.debug("Fetching executions for multiple flows: {}", flowIdsParam);
-        
+
         // Parse and validate flow IDs
         List<Long> flowIds = parseAndValidateFlowIds(flowIdsParam);
-        
+
         // Get all executions for the specified flows
         Page<FlowExecution> executionsPage = flowExecutionRepository.findByFlowIdIn(flowIds, pageable);
-        
-        // Convert to DTOs
+
+        // Convert to DTOs with full details (flow, flowSteps, applications, pipelineExecutions)
         List<FlowExecutionDto> executionDtos = executionsPage.getContent().stream()
-                .map(this::convertToDto)
+                .map(this::convertToDtoWithDetails)
                 .collect(Collectors.toList());
-        
+
         logger.debug("Found {} executions for flows: {}", executionDtos.size(), flowIds);
-        
+
         return new PageImpl<>(executionDtos, pageable, executionsPage.getTotalElements());
     }
 
@@ -440,14 +440,20 @@ public class FlowExecutionService {
         return accumulatedVariables;
     }
 
-    private PipelineExecution executeReplayPipelineStep(FlowExecution flowExecution, FlowStep step, 
-                                                       Application application, Map<String, String> pipelineVariables, 
+    private PipelineExecution executeReplayPipelineStep(FlowExecution flowExecution, FlowStep step,
+                                                       Application application, Map<String, String> pipelineVariables,
                                                        UUID originalFlowExecutionId) {
         logger.info("Executing REPLAY pipeline step: {} for flow execution: {}", step.getId(), flowExecution.getId());
-        
+
         // Use the already merged pipeline variables (Global + FlowStep + Runtime)
         Map<String, String> mergedVariables = new HashMap<>(pipelineVariables);
-        
+
+        // Add the testTag from FlowStep to make it available in GitLab pipeline scope
+        if (step.getTestTag() != null && !step.getTestTag().trim().isEmpty()) {
+            mergedVariables.put("testTag", step.getTestTag());
+            logger.debug("Added testTag '{}' to replay pipeline variables for step {}", step.getTestTag(), step.getId());
+        }
+
         // Create pipeline execution record with replay flag
         PipelineExecution pipelineExecution = new PipelineExecution(
                 flowExecution.getFlowId(),
@@ -530,13 +536,19 @@ public class FlowExecutionService {
         return pipelineExecution;
     }
 
-    private PipelineExecution executePipelineStep(FlowExecution flowExecution, FlowStep step, 
+    private PipelineExecution executePipelineStep(FlowExecution flowExecution, FlowStep step,
                                                  Application application, Map<String, String> pipelineVariables) {
         logger.info("Executing pipeline step: {} for flow execution: {}", step.getId(), flowExecution.getId());
-        
+
         // Use the already merged pipeline variables (Global + FlowStep + Runtime)
         Map<String, String> mergedVariables = new HashMap<>(pipelineVariables);
-        
+
+        // Add the testTag from FlowStep to make it available in GitLab pipeline scope
+        if (step.getTestTag() != null && !step.getTestTag().trim().isEmpty()) {
+            mergedVariables.put("testTag", step.getTestTag());
+            logger.debug("Added testTag '{}' to pipeline variables for step {}", step.getTestTag(), step.getId());
+        }
+
         // Create pipeline execution record
         PipelineExecution pipelineExecution = new PipelineExecution(
                 flowExecution.getFlowId(),
@@ -637,26 +649,32 @@ public class FlowExecutionService {
                 }
                 
                 if (targetJob != null) {
-                    logger.info("Found target job {} in stage {} for pipeline {}", 
+                    logger.info("Found target job {} in stage {} for pipeline {}",
                                targetJob.getId(), targetJob.getStage(), pipelineExecution.getPipelineId());
-                    
+
+                    // Set job information
+                    pipelineExecution.setJobId(targetJob.getId());
+                    pipelineExecution.setJobUrl(targetJob.getWebUrl());
+                    pipelineExecutionRepository.save(pipelineExecution);
+
                     // Download output.env from target/output.env
                     String artifactContent = gitLabApiClient
                             .downloadJobArtifact(gitlabBaseUrl, application.getGitlabProjectId(),
                                                targetJob.getId(), applicationService.getDecryptedPersonalAccessToken(application.getId()), "target/output.env")
                             .block();
-                    
+
                     if (artifactContent != null && !artifactContent.trim().isEmpty()) {
                         Map<String, String> parsedVariables = outputEnvParser.parseOutputEnv(artifactContent);
                         pipelineExecution.setRuntimeTestData(parsedVariables);
-                        logger.info("Successfully downloaded and parsed artifacts from job {}: {} variables", 
+                        pipelineExecutionRepository.save(pipelineExecution);
+                        logger.info("Successfully downloaded and parsed artifacts from job {}: {} variables",
                                    targetJob.getId(), parsedVariables.size());
                     } else {
-                        logger.info("No artifact content found in job {}, continuing without runtime data", 
+                        logger.info("No artifact content found in job {}, continuing without runtime data",
                                    targetJob.getId());
                     }
                 } else {
-                    logger.info("No successful job found for stage '{}' in pipeline {}", 
+                    logger.info("No successful job found for stage '{}' in pipeline {}",
                                step.getTestStage(), pipelineExecution.getPipelineId());
                 }
             } else {
@@ -801,6 +819,7 @@ public class FlowExecutionService {
         dto.setId(entity.getId());
         dto.setFlowStepIds(entity.getFlowStepIds());
         dto.setSquashTestCaseId(entity.getSquashTestCaseId());
+        dto.setSquashTestCase(entity.getSquashTestCase());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
@@ -866,6 +885,8 @@ public class FlowExecutionService {
         dto.setFlowStepId(entity.getFlowStepId());
         dto.setPipelineId(entity.getPipelineId());
         dto.setPipelineUrl(entity.getPipelineUrl());
+        dto.setJobId(entity.getJobId());
+        dto.setJobUrl(entity.getJobUrl());
         dto.setStartTime(entity.getStartTime());
         dto.setEndTime(entity.getEndTime());
         dto.setConfiguredTestData(entity.getConfiguredTestData());

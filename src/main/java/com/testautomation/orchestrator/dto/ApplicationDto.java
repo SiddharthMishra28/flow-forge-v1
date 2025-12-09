@@ -40,6 +40,9 @@ public class ApplicationDto {
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Token validation status")
     private TokenStatus tokenStatus;
 
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when token validation was last performed")
+    private LocalDateTime tokenValidationLastUpdateDate;
+
     @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Timestamp when the record was created")
     private LocalDateTime createdAt;
     
@@ -133,5 +136,13 @@ public class ApplicationDto {
 
     public void setTokenStatus(TokenStatus tokenStatus) {
         this.tokenStatus = tokenStatus;
+    }
+
+    public LocalDateTime getTokenValidationLastUpdateDate() {
+        return tokenValidationLastUpdateDate;
+    }
+
+    public void setTokenValidationLastUpdateDate(LocalDateTime tokenValidationLastUpdateDate) {
+        this.tokenValidationLastUpdateDate = tokenValidationLastUpdateDate;
     }
 }
