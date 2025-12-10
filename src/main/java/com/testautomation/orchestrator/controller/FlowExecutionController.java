@@ -109,18 +109,18 @@ public class FlowExecutionController {
     }
 
     @GetMapping("/flows/executions")
-    @Operation(summary = "Get multiple flow executions", description = "Get execution data for multiple flows. Supports pagination and sorting.")
+    @Operation(summary = "Get flow executions", description = "Get execution data for flows. When 'triggered' parameter is provided, gets executions for specific flows. When not provided, gets all executions. Supports pagination and sorting.")
     @ApiResponse(responseCode = "200", description = "Flow executions retrieved successfully")
     public ResponseEntity<?> getMultipleFlowExecutions(
-            @Parameter(description = "Comma-separated flow IDs to get executions for", example = "1,2,3") 
-            @RequestParam("triggered") String flowIds,
+            @Parameter(description = "Optional comma-separated flow IDs to get executions for. If not provided, returns all executions.", example = "1,2,3") 
+            @RequestParam(value = "triggered", required = false) String flowIds,
             @Parameter(description = "Page number (0-based)") @RequestParam(required = false) Integer page,
             @Parameter(description = "Page size") @RequestParam(required = false) Integer size,
             @Parameter(description = "Sort by field (e.g., 'startTime', 'endTime', 'status', 'createdAt')") @RequestParam(required = false) String sortBy,
             @Parameter(description = "Sort direction (ASC or DESC)") @RequestParam(required = false, defaultValue = "DESC") String sortDirection) {
         
-        logger.debug("Fetching executions for multiple flows: {} with page: {}, size: {}, sortBy: {}, sortDirection: {}", 
-                    flowIds, page, size, sortBy, sortDirection);
+        logger.debug("Fetching executions for flows: {} with page: {}, size: {}, sortBy: {}, sortDirection: {}", 
+                    flowIds != null ? flowIds : "ALL", page, size, sortBy, sortDirection);
         
         try {
             // If pagination parameters are provided, use pagination
@@ -140,7 +140,15 @@ public class FlowExecutionController {
                 }
                 
                 Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
-                Page<FlowExecutionDto> executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
+                Page<FlowExecutionDto> executionsPage;
+                
+                if (flowIds != null && !flowIds.trim().isEmpty()) {
+                    // Get executions for specific flows
+                    executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
+                } else {
+                    // Get all executions
+                    executionsPage = flowExecutionService.getAllFlowExecutions(pageable);
+                }
                 
                 return ResponseEntity.ok(executionsPage);
             } else {
@@ -158,7 +166,15 @@ public class FlowExecutionController {
                 }
                 
                 Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sort);
-                Page<FlowExecutionDto> executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
+                Page<FlowExecutionDto> executionsPage;
+                
+                if (flowIds != null && !flowIds.trim().isEmpty()) {
+                    // Get executions for specific flows
+                    executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
+                } else {
+                    // Get all executions
+                    executionsPage = flowExecutionService.getAllFlowExecutions(pageable);
+                }
                 
                 return ResponseEntity.ok(executionsPage.getContent());
             }

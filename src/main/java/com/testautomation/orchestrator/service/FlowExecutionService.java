@@ -165,6 +165,22 @@ public class FlowExecutionService {
         return new PageImpl<>(executionDtos, pageable, executionsPage.getTotalElements());
     }
 
+    public Page<FlowExecutionDto> getAllFlowExecutions(Pageable pageable) {
+        logger.debug("Fetching all flow executions with pagination: {}", pageable);
+
+        // Get all executions
+        Page<FlowExecution> executionsPage = flowExecutionRepository.findAll(pageable);
+
+        // Convert to DTOs with full details (flow, flowSteps, applications, pipelineExecutions)
+        List<FlowExecutionDto> executionDtos = executionsPage.getContent().stream()
+                .map(this::convertToDtoWithDetails)
+                .collect(Collectors.toList());
+
+        logger.debug("Found {} total executions", executionDtos.size());
+
+        return new PageImpl<>(executionDtos, pageable, executionsPage.getTotalElements());
+    }
+
     private List<Long> parseAndValidateFlowIds(String flowIdsParam) {
         if (flowIdsParam == null || flowIdsParam.trim().isEmpty()) {
             throw new IllegalArgumentException("Flow IDs parameter cannot be empty");
