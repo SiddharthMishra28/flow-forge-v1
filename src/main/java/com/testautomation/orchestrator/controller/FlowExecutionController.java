@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -109,15 +110,17 @@ public class FlowExecutionController {
     }
 
     @GetMapping("/flows/executions")
-    @Operation(summary = "Get flow executions", description = "Get execution data for flows. When 'triggered' parameter is provided, gets executions for specific flows. When not provided, gets all executions. Supports pagination and sorting.")
+    @Operation(summary = "Get flow executions", description = "Get execution data for flows. When 'triggered' parameter is provided, gets executions for specific flows. When not provided, gets all executions. Supports pagination, sorting, and optional 'search' across execution id, squashTestCaseId, or squashTestCase (partial, case-insensitive).")
     @ApiResponse(responseCode = "200", description = "Flow executions retrieved successfully")
     public ResponseEntity<?> getMultipleFlowExecutions(
-            @Parameter(description = "Optional comma-separated flow IDs to get executions for. If not provided, returns all executions.", example = "1,2,3") 
-            @RequestParam(value = "triggered", required = false) String flowIds,
-            @Parameter(description = "Page number (0-based)") @RequestParam(required = false) Integer page,
-            @Parameter(description = "Page size") @RequestParam(required = false) Integer size,
-            @Parameter(description = "Sort by field (e.g., 'startTime', 'endTime', 'status', 'createdAt')") @RequestParam(required = false) String sortBy,
-            @Parameter(description = "Sort direction (ASC or DESC)") @RequestParam(required = false, defaultValue = "DESC") String sortDirection) {
+           @Parameter(description = "Optional comma-separated flow IDs to get executions for. If not provided, returns all executions.", example = "1,2,3") 
+           @RequestParam(value = "triggered", required = false) String flowIds,
+           @Parameter(description = "Optional search term. Matches by execution id (UUID), squashTestCaseId, or squashTestCase (partial, case-insensitive)", example = "ABC-123 or 42")
+           @RequestParam(value = "search", required = false) String search,
+           @Parameter(description = "Page number (0-based)") @RequestParam(required = false) Integer page,
+           @Parameter(description = "Page size") @RequestParam(required = false) Integer size,
+           @Parameter(description = "Sort by field (e.g., 'startTime', 'endTime', 'status', 'createdAt')") @RequestParam(required = false) String sortBy,
+           @Parameter(description = "Sort direction (ASC or DESC)") @RequestParam(required = false, defaultValue = "DESC") String sortDirection) {
         
         logger.debug("Fetching executions for flows: {} with page: {}, size: {}, sortBy: {}, sortDirection: {}", 
                     flowIds != null ? flowIds : "ALL", page, size, sortBy, sortDirection);
@@ -140,17 +143,33 @@ public class FlowExecutionController {
                 }
                 
                 Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
-                Page<FlowExecutionDto> executionsPage;
-                
-                if (flowIds != null && !flowIds.trim().isEmpty()) {
-                    // Get executions for specific flows
-                    executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
-                } else {
-                    // Get all executions
-                    executionsPage = flowExecutionService.getAllFlowExecutions(pageable);
-                }
-                
-                return ResponseEntity.ok(executionsPage);
+               Page<FlowExecutionDto> executionsPage;
+               
+               // If search is provided, fetch all then filter and manually paginate
+               if (search != null && !search.trim().isEmpty()) {
+                   Pageable allPageable = PageRequest.of(0, Integer.MAX_VALUE, sort);
+                   Page<FlowExecutionDto> allPage;
+                   if (flowIds != null && !flowIds.trim().isEmpty()) {
+                       allPage = flowExecutionService.getMultipleFlowExecutions(flowIds, allPageable);
+                   } else {
+                       allPage = flowExecutionService.getAllFlowExecutions(allPageable);
+                   }
+                   List<FlowExecutionDto> filtered = filterExecutions(allPage.getContent(), search);
+                   int fromIndex = Math.min(pageNumber * pageSize, filtered.size());
+                   int toIndex = Math.min(fromIndex + pageSize, filtered.size());
+                   List<FlowExecutionDto> pageContent = filtered.subList(fromIndex, toIndex);
+                   executionsPage = new PageImpl<>(pageContent, pageable, filtered.size());
+               } else {
+                   if (flowIds != null && !flowIds.trim().isEmpty()) {
+                       // Get executions for specific flows
+                       executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
+                   } else {
+                       // Get all executions
+                       executionsPage = flowExecutionService.getAllFlowExecutions(pageable);
+                   }
+               }
+               
+               return ResponseEntity.ok(executionsPage);
             } else {
                 // Return all data without pagination (backward compatibility)
                 // Apply default sorting (startTime DESC) even without pagination
@@ -166,17 +185,29 @@ public class FlowExecutionController {
                 }
                 
                 Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sort);
-                Page<FlowExecutionDto> executionsPage;
-                
-                if (flowIds != null && !flowIds.trim().isEmpty()) {
-                    // Get executions for specific flows
-                    executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
-                } else {
-                    // Get all executions
-                    executionsPage = flowExecutionService.getAllFlowExecutions(pageable);
-                }
-                
-                return ResponseEntity.ok(executionsPage.getContent());
+               Page<FlowExecutionDto> executionsPage;
+               
+               if (search != null && !search.trim().isEmpty()) {
+                   Pageable allPageable = PageRequest.of(0, Integer.MAX_VALUE, sort);
+                   Page<FlowExecutionDto> allPage;
+                   if (flowIds != null && !flowIds.trim().isEmpty()) {
+                       allPage = flowExecutionService.getMultipleFlowExecutions(flowIds, allPageable);
+                   } else {
+                       allPage = flowExecutionService.getAllFlowExecutions(allPageable);
+                   }
+                   List<FlowExecutionDto> filtered = filterExecutions(allPage.getContent(), search);
+                   return ResponseEntity.ok(filtered);
+               } else {
+                   if (flowIds != null && !flowIds.trim().isEmpty()) {
+                       // Get executions for specific flows
+                       executionsPage = flowExecutionService.getMultipleFlowExecutions(flowIds, pageable);
+                   } else {
+                       // Get all executions
+                       executionsPage = flowExecutionService.getAllFlowExecutions(pageable);
+                   }
+                   
+                   return ResponseEntity.ok(executionsPage.getContent());
+               }
             }
         } catch (IllegalArgumentException e) {
             logger.error("Failed to get multiple flow executions: {}", e.getMessage());
@@ -188,7 +219,37 @@ public class FlowExecutionController {
         }
     }
 
-    @GetMapping("/flow-executions/{flowExecutionUUID}")
+   private List<FlowExecutionDto> filterExecutions(List<FlowExecutionDto> executions, String search) {
+       if (search == null || search.trim().isEmpty()) return executions;
+       String term = search.trim().toLowerCase();
+       List<FlowExecutionDto> result = new java.util.ArrayList<>();
+       for (FlowExecutionDto dto : executions) {
+           boolean matches = false;
+           // Match by id (UUID) contains
+           if (dto.getId() != null && dto.getId().toString().toLowerCase().contains(term)) {
+               matches = true;
+           }
+           // Match by squashTestCaseId (exact or partial numeric match in string form)
+           if (!matches && dto.getFlow() != null && dto.getFlow().getSquashTestCaseId() != null) {
+               String idStr = dto.getFlow().getSquashTestCaseId().toString();
+               if (idStr.contains(term)) {
+                   matches = true;
+               }
+           }
+           // Match by squashTestCase (partial string)
+           if (!matches && dto.getFlow() != null && dto.getFlow().getSquashTestCase() != null) {
+               if (dto.getFlow().getSquashTestCase().toLowerCase().contains(term)) {
+                   matches = true;
+               }
+           }
+           if (matches) {
+               result.add(dto);
+           }
+       }
+       return result;
+   }
+
+   @GetMapping("/flow-executions/{flowExecutionUUID}")
     @Operation(summary = "Get flow execution details", 
                description = "Get comprehensive flow execution details including nested flow, steps, applications, and pipeline executions")
     @ApiResponses(value = {

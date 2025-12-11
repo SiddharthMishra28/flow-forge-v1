@@ -225,7 +225,7 @@ Open the log streaming page in your browser to see live logs. Replace `{flowExec
 
 ##### **🆕 Multiple Flow Execution (Brand New!)**
 - **🆕 NEW!** `POST /api/flows/execute?trigger={flowId1},{flowId2},{flowId3}`: **Execute multiple flows simultaneously** with intelligent thread pool management, capacity monitoring, and graceful rejection.
-- **🆕 NEW!** `GET /api/flows/executions?triggered={flowId1},{flowId2},{flowId3}`: **Query multiple flow executions** with pagination and default sorting by `startTime DESC`.
+- **🆕 NEW!** `GET /api/flows/executions?triggered={flowId1},{flowId2},{flowId3}&search={term}`: **Query multiple flow executions** with pagination and default sorting by `startTime DESC`. Now supports `search` to match by execution `id` (UUID), `squashTestCaseId`, or `squashTestCase` (partial, case-insensitive).
 
 #### Pipeline Executions (Pipeline Execution Monitoring API)
 - `GET /api/flow-executions/{flowExecutionUUID}/pipelines`: Get all pipeline executions for a flow execution. **Supports pagination & sorting**
@@ -270,6 +270,9 @@ GET /api/flows/1/executions?page=0&size=10
 
 # Get multiple flow executions (new endpoint!) - NEW!
 GET /api/flows/executions?triggered=1,2,3&page=0&size=10
+# With search across id, squashTestCaseId, or squashTestCase (partial)
+GET /api/flows/executions?search=login
+GET /api/flows/executions?triggered=1,2,3&search=12345
 
 # Get pipeline executions with sorting
 GET /api/flow-executions/uuid/pipelines?sortBy=startTime&sortDirection=DESC
@@ -417,7 +420,7 @@ POST /api/flows/execute?trigger=1,2,3,4,5
 
 **New Endpoints:**
 - `POST /api/flows/execute?trigger=1,2,3` - Execute multiple flows
-- `GET /api/flows/executions?triggered=1,2,3` - Query multiple flow executions
+- `GET /api/flows/executions?triggered=1,2,3&search={term}` - Query multiple flow executions (supports optional search across id, squashTestCaseId, squashTestCase)
 
 **Thread Pool Management:**
 ```json
@@ -463,7 +466,7 @@ POST /api/flows/execute?trigger=1,2,3,4,5
 
 **Implementation:**
 - `/api/flows` now defaults to `updatedAt DESC` (newest first)
-- `/api/flows/executions` defaults to `startTime DESC` (most recent first)
+- `/api/flows/executions` defaults to `startTime DESC` (most recent first) and supports optional `search` across execution `id`, `squashTestCaseId`, or `squashTestCase`
 - Maintains backward compatibility with existing sorting parameters
 
 ### **🔧 Technical Implementation Details**
