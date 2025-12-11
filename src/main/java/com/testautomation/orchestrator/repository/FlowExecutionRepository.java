@@ -84,4 +84,17 @@ public interface FlowExecutionRepository extends JpaRepository<FlowExecution, UU
            "COUNT(*), MAX(fe.endTime) " +
            "FROM FlowExecution fe")
     List<Object[]> findTopFailingApplications(@Param("limit") int limit);
+
+    // Search across execution id (UUID as string), squashTestCaseId, squashTestCase
+    @Query("SELECT fe FROM FlowExecution fe JOIN Flow f ON fe.flowId = f.id " +
+           "WHERE (LOWER(CAST(fe.id as string)) LIKE LOWER(CONCAT('%', :term, '%')) " +
+           "OR CAST(f.squashTestCaseId as string) LIKE CONCAT('%', :term, '%') " +
+           "OR LOWER(f.squashTestCase) LIKE LOWER(CONCAT('%', :term, '%')))" )
+    Page<FlowExecution> searchAll(@Param("term") String term, Pageable pageable);
+
+    @Query("SELECT fe FROM FlowExecution fe JOIN Flow f ON fe.flowId = f.id " +
+           "WHERE fe.flowId IN :flowIds AND (LOWER(CAST(fe.id as string)) LIKE LOWER(CONCAT('%', :term, '%')) " +
+           "OR CAST(f.squashTestCaseId as string) LIKE CONCAT('%', :term, '%') " +
+           "OR LOWER(f.squashTestCase) LIKE LOWER(CONCAT('%', :term, '%')))" )
+    Page<FlowExecution> searchByFlowIds(@Param("flowIds") List<Long> flowIds, @Param("term") String term, Pageable pageable);
 }

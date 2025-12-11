@@ -146,6 +146,14 @@ public class FlowExecutionService {
     }
 
 
+    public Page<FlowExecutionDto> searchExecutionsByFlowIds(String flowIdsParam, String term, Pageable pageable) {
+        logger.debug("Searching executions for multiple flows: {} with term '{}'", flowIdsParam, term);
+        List<Long> flowIds = parseAndValidateFlowIds(flowIdsParam);
+        Page<FlowExecution> page = flowExecutionRepository.searchByFlowIds(flowIds, term, pageable);
+        List<FlowExecutionDto> dtos = page.getContent().stream().map(this::convertToDtoWithDetails).collect(Collectors.toList());
+        return new PageImpl<>(dtos, pageable, page.getTotalElements());
+    }
+
     public Page<FlowExecutionDto> getMultipleFlowExecutions(String flowIdsParam, Pageable pageable) {
         logger.debug("Fetching executions for multiple flows: {}", flowIdsParam);
 
@@ -163,6 +171,13 @@ public class FlowExecutionService {
         logger.debug("Found {} executions for flows: {}", executionDtos.size(), flowIds);
 
         return new PageImpl<>(executionDtos, pageable, executionsPage.getTotalElements());
+    }
+
+    public Page<FlowExecutionDto> searchAllFlowExecutions(String term, Pageable pageable) {
+        logger.debug("Searching all flow executions with term: '{}' and pagination: {}", term, pageable);
+        Page<FlowExecution> page = flowExecutionRepository.searchAll(term, pageable);
+        List<FlowExecutionDto> dtos = page.getContent().stream().map(this::convertToDtoWithDetails).collect(Collectors.toList());
+        return new PageImpl<>(dtos, pageable, page.getTotalElements());
     }
 
     public Page<FlowExecutionDto> getAllFlowExecutions(Pageable pageable) {

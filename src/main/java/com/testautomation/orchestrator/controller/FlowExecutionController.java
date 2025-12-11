@@ -13,7 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.PageImpl;
+// import removed: PageImpl no longer used after DB-side search
+// import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -145,20 +146,13 @@ public class FlowExecutionController {
                 Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
                Page<FlowExecutionDto> executionsPage;
                
-               // If search is provided, fetch all then filter and manually paginate
+                // If search is provided, delegate to service for DB-side filtering and pagination
                if (search != null && !search.trim().isEmpty()) {
-                   Pageable allPageable = PageRequest.of(0, Integer.MAX_VALUE, sort);
-                   Page<FlowExecutionDto> allPage;
                    if (flowIds != null && !flowIds.trim().isEmpty()) {
-                       allPage = flowExecutionService.getMultipleFlowExecutions(flowIds, allPageable);
+                       executionsPage = flowExecutionService.searchExecutionsByFlowIds(flowIds, search, pageable);
                    } else {
-                       allPage = flowExecutionService.getAllFlowExecutions(allPageable);
+                       executionsPage = flowExecutionService.searchAllFlowExecutions(search, pageable);
                    }
-                   List<FlowExecutionDto> filtered = filterExecutions(allPage.getContent(), search);
-                   int fromIndex = Math.min(pageNumber * pageSize, filtered.size());
-                   int toIndex = Math.min(fromIndex + pageSize, filtered.size());
-                   List<FlowExecutionDto> pageContent = filtered.subList(fromIndex, toIndex);
-                   executionsPage = new PageImpl<>(pageContent, pageable, filtered.size());
                } else {
                    if (flowIds != null && !flowIds.trim().isEmpty()) {
                        // Get executions for specific flows
@@ -187,16 +181,14 @@ public class FlowExecutionController {
                 Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sort);
                Page<FlowExecutionDto> executionsPage;
                
-               if (search != null && !search.trim().isEmpty()) {
-                   Pageable allPageable = PageRequest.of(0, Integer.MAX_VALUE, sort);
-                   Page<FlowExecutionDto> allPage;
+                if (search != null && !search.trim().isEmpty()) {
                    if (flowIds != null && !flowIds.trim().isEmpty()) {
-                       allPage = flowExecutionService.getMultipleFlowExecutions(flowIds, allPageable);
+                       Page<FlowExecutionDto> pageResult = flowExecutionService.searchExecutionsByFlowIds(flowIds, search, pageable);
+                       return ResponseEntity.ok(pageResult.getContent());
                    } else {
-                       allPage = flowExecutionService.getAllFlowExecutions(allPageable);
+                       Page<FlowExecutionDto> pageResult = flowExecutionService.searchAllFlowExecutions(search, pageable);
+                       return ResponseEntity.ok(pageResult.getContent());
                    }
-                   List<FlowExecutionDto> filtered = filterExecutions(allPage.getContent(), search);
-                   return ResponseEntity.ok(filtered);
                } else {
                    if (flowIds != null && !flowIds.trim().isEmpty()) {
                        // Get executions for specific flows
@@ -219,37 +211,7 @@ public class FlowExecutionController {
         }
     }
 
-   private List<FlowExecutionDto> filterExecutions(List<FlowExecutionDto> executions, String search) {
-       if (search == null || search.trim().isEmpty()) return executions;
-       String term = search.trim().toLowerCase();
-       List<FlowExecutionDto> result = new java.util.ArrayList<>();
-       for (FlowExecutionDto dto : executions) {
-           boolean matches = false;
-           // Match by id (UUID) contains
-           if (dto.getId() != null && dto.getId().toString().toLowerCase().contains(term)) {
-               matches = true;
-           }
-           // Match by squashTestCaseId (exact or partial numeric match in string form)
-           if (!matches && dto.getFlow() != null && dto.getFlow().getSquashTestCaseId() != null) {
-               String idStr = dto.getFlow().getSquashTestCaseId().toString();
-               if (idStr.contains(term)) {
-                   matches = true;
-               }
-           }
-           // Match by squashTestCase (partial string)
-           if (!matches && dto.getFlow() != null && dto.getFlow().getSquashTestCase() != null) {
-               if (dto.getFlow().getSquashTestCase().toLowerCase().contains(term)) {
-                   matches = true;
-               }
-           }
-           if (matches) {
-               result.add(dto);
-           }
-       }
-       return result;
-   }
-
-   @GetMapping("/flow-executions/{flowExecutionUUID}")
+    @GetMapping("/flow-executions/{flowExecutionUUID}")
     @Operation(summary = "Get flow execution details", 
                description = "Get comprehensive flow execution details including nested flow, steps, applications, and pipeline executions")
     @ApiResponses(value = {
