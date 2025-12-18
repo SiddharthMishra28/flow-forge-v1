@@ -16,6 +16,8 @@ public class FlowExecutionDto {
     private Map<String, String> runtimeVariables;
     private ExecutionStatus status;
     private LocalDateTime createdAt;
+    private Boolean isReplay;
+    private UUID originalFlowExecutionId;
 
     // Nested details for comprehensive response
     private FlowDto flow;
@@ -88,6 +90,22 @@ public class FlowExecutionDto {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Boolean getIsReplay() {
+        return isReplay;
+    }
+
+    public void setIsReplay(Boolean isReplay) {
+        this.isReplay = isReplay;
+    }
+
+    public UUID getOriginalFlowExecutionId() {
+        return originalFlowExecutionId;
+    }
+
+    public void setOriginalFlowExecutionId(UUID originalFlowExecutionId) {
+        this.originalFlowExecutionId = originalFlowExecutionId;
     }
 
     public FlowDto getFlow() {

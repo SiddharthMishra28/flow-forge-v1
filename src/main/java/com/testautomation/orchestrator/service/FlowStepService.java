@@ -94,6 +94,13 @@ public class FlowStepService {
         existingFlowStep.setSquashStepIds(flowStepDto.getSquashStepIds());
         existingFlowStep.setTestDataIds(flowStepDto.getTestDataIds());
         
+        // Handle optional invokeScheduler
+        if (flowStepDto.getInvokeScheduler() != null) {
+            existingFlowStep.setInvokeScheduler(convertInvokeSchedulerDtoToEntity(flowStepDto.getInvokeScheduler()));
+        } else {
+            existingFlowStep.setInvokeScheduler(null);
+        }
+        
         FlowStep updatedFlowStep = flowStepRepository.save(existingFlowStep);
         
         logger.info("Flow step updated successfully with ID: {}", updatedFlowStep.getId());
@@ -119,6 +126,12 @@ public class FlowStepService {
         flowStep.setTestStage(dto.getTestStage());
         flowStep.setSquashStepIds(dto.getSquashStepIds());
         flowStep.setTestDataIds(dto.getTestDataIds());
+        
+        // Handle optional invokeScheduler
+        if (dto.getInvokeScheduler() != null) {
+            flowStep.setInvokeScheduler(convertInvokeSchedulerDtoToEntity(dto.getInvokeScheduler()));
+        }
+        
         return flowStep;
     }
 
@@ -133,6 +146,46 @@ public class FlowStepService {
         dto.setTestDataIds(entity.getTestDataIds());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
+        
+        // Handle optional invokeScheduler
+        if (entity.getInvokeScheduler() != null) {
+            dto.setInvokeScheduler(convertInvokeSchedulerEntityToDto(entity.getInvokeScheduler()));
+        }
+        
+        return dto;
+    }
+    
+    private com.testautomation.orchestrator.model.InvokeScheduler convertInvokeSchedulerDtoToEntity(com.testautomation.orchestrator.dto.InvokeSchedulerDto dto) {
+        if (dto == null) return null;
+        
+        com.testautomation.orchestrator.model.InvokeScheduler entity = new com.testautomation.orchestrator.model.InvokeScheduler();
+        entity.setType(dto.getType());
+        
+        if (dto.getTimer() != null) {
+            com.testautomation.orchestrator.model.Timer timer = new com.testautomation.orchestrator.model.Timer();
+            timer.setMinutes(dto.getTimer().getMinutes());
+            timer.setHours(dto.getTimer().getHours());
+            timer.setDays(dto.getTimer().getDays());
+            entity.setTimer(timer);
+        }
+        
+        return entity;
+    }
+    
+    private com.testautomation.orchestrator.dto.InvokeSchedulerDto convertInvokeSchedulerEntityToDto(com.testautomation.orchestrator.model.InvokeScheduler entity) {
+        if (entity == null) return null;
+        
+        com.testautomation.orchestrator.dto.InvokeSchedulerDto dto = new com.testautomation.orchestrator.dto.InvokeSchedulerDto();
+        dto.setType(entity.getType());
+        
+        if (entity.getTimer() != null) {
+            com.testautomation.orchestrator.dto.TimerDto timerDto = new com.testautomation.orchestrator.dto.TimerDto();
+            timerDto.setMinutes(entity.getTimer().getMinutes());
+            timerDto.setHours(entity.getTimer().getHours());
+            timerDto.setDays(entity.getTimer().getDays());
+            dto.setTimer(timerDto);
+        }
+        
         return dto;
     }
 }

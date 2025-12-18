@@ -40,8 +40,9 @@ public class TestDataController {
     }
 
     @GetMapping
-    @Operation(summary = "Get all test data", description = "Retrieves all test data entries. Supports pagination and sorting.")
+    @Operation(summary = "Get all test data", description = "Retrieves all test data entries. Supports pagination, sorting, and filtering by application ID.")
     public ResponseEntity<?> getAllTestData(
+            @Parameter(description = "Application ID to filter test data") @RequestParam(required = false) Long applicationId,
             @Parameter(description = "Page number (0-based)") @RequestParam(required = false) Integer page,
             @Parameter(description = "Page size") @RequestParam(required = false) Integer size,
             @Parameter(description = "Sort by field (e.g., 'dataId', 'applicationName', 'category', 'createdAt', 'updatedAt')") @RequestParam(required = false) String sortBy,
@@ -59,12 +60,12 @@ public class TestDataController {
             }
             
             Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
-            Page<TestDataDto> testDataPage = testDataService.getAllTestData(pageable);
+            Page<TestDataDto> testDataPage = testDataService.getAllTestData(pageable, applicationId);
             
             return ResponseEntity.ok(testDataPage);
         } else {
             // Return all data without pagination (backward compatibility)
-            List<TestDataDto> testDataList = testDataService.getAllTestData();
+            List<TestDataDto> testDataList = testDataService.getAllTestData(applicationId);
             return ResponseEntity.ok(testDataList);
         }
     }

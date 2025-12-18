@@ -38,6 +38,12 @@ public class FlowExecution {
     @Column(name = "status")
     private ExecutionStatus status;
 
+    @Column(name = "is_replay")
+    private Boolean isReplay = Boolean.FALSE;
+
+    @Column(name = "original_flow_execution_id")
+    private UUID originalFlowExecutionId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -53,6 +59,8 @@ public class FlowExecution {
         this.runtimeVariables = runtimeVariables;
         this.status = ExecutionStatus.RUNNING;
         this.startTime = LocalDateTime.now();
+        this.isReplay = Boolean.FALSE;
+        this.originalFlowExecutionId = null;
     }
 
     // Getters and Setters
@@ -111,5 +119,21 @@ public class FlowExecution {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Boolean getIsReplay() {
+        return isReplay;
+    }
+
+    public void setIsReplay(Boolean isReplay) {
+        this.isReplay = isReplay;
+    }
+
+    public UUID getOriginalFlowExecutionId() {
+        return originalFlowExecutionId;
+    }
+
+    public void setOriginalFlowExecutionId(UUID originalFlowExecutionId) {
+        this.originalFlowExecutionId = originalFlowExecutionId;
     }
 }

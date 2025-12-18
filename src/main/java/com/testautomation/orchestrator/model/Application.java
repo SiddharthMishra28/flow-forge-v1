@@ -43,6 +43,9 @@ public class Application {
     @Column(name = "token_status", nullable = false)
     private TokenStatus tokenStatus = TokenStatus.ACTIVE;
 
+    @Column(name = "token_validation_last_update_date")
+    private LocalDateTime tokenValidationLastUpdateDate;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -138,5 +141,13 @@ public class Application {
 
     public void setTokenStatus(TokenStatus tokenStatus) {
         this.tokenStatus = tokenStatus;
+    }
+
+    public LocalDateTime getTokenValidationLastUpdateDate() {
+        return tokenValidationLastUpdateDate;
+    }
+
+    public void setTokenValidationLastUpdateDate(LocalDateTime tokenValidationLastUpdateDate) {
+        this.tokenValidationLastUpdateDate = tokenValidationLastUpdateDate;
     }
 }

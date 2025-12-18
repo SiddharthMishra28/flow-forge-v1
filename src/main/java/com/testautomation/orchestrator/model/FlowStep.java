@@ -49,7 +49,6 @@ public class FlowStep {
     private List<Long> testDataIds;
 
     @Embedded
-    @Valid
     private InvokeScheduler invokeScheduler;
 
     @CreationTimestamp
