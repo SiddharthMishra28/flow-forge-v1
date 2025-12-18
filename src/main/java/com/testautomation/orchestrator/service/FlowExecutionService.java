@@ -566,6 +566,7 @@ public class FlowExecutionService {
             logger.debug("Added testTag '{}' to replay pipeline variables for step {}", step.getTestTag(), step.getId());
         }
 
+<<<<<<< HEAD
         // Reuse pre-created placeholder if available; otherwise create
         PipelineExecution pipelineExecution = pipelineExecutionRepository
                 .findTopByFlowExecutionIdAndFlowStepIdOrderByCreatedAtAsc(flowExecution.getId(), step.getId())
@@ -584,6 +585,16 @@ public class FlowExecutionService {
         if (pipelineExecution.getStartTime() == null) {
             pipelineExecution.setStartTime(LocalDateTime.now());
         }
+=======
+        // Create pipeline execution record with replay flag
+        PipelineExecution pipelineExecution = new PipelineExecution(
+                flowExecution.getFlowId(),
+                flowExecution.getId(),
+                step.getId(),
+                testDataService.mergeTestDataByIds(step.getTestDataIds()),
+                pipelineVariables
+        );
+>>>>>>> 45337e0f5e84442bf64d0dc728cc40e7ec46fc6a
         pipelineExecution.setIsReplay(true);
         pipelineExecution.setOriginalFlowExecutionId(originalFlowExecutionId);
         pipelineExecution = pipelineExecutionTxService.saveUpdate(pipelineExecution);
@@ -671,6 +682,7 @@ public class FlowExecutionService {
             logger.debug("Added testTag '{}' to pipeline variables for step {}", step.getTestTag(), step.getId());
         }
 
+<<<<<<< HEAD
         // Reuse pre-created placeholder if available; otherwise create
         PipelineExecution pipelineExecution = pipelineExecutionRepository
                 .findTopByFlowExecutionIdAndFlowStepIdOrderByCreatedAtAsc(flowExecution.getId(), step.getId())
@@ -690,6 +702,17 @@ public class FlowExecutionService {
             pipelineExecution.setStartTime(LocalDateTime.now());
         }
         pipelineExecution = pipelineExecutionTxService.saveUpdate(pipelineExecution);
+=======
+        // Create pipeline execution record
+        PipelineExecution pipelineExecution = new PipelineExecution(
+                flowExecution.getFlowId(),
+                flowExecution.getId(),
+                step.getId(),
+                testDataService.mergeTestDataByIds(step.getTestDataIds()),
+                pipelineVariables
+        );
+        pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+>>>>>>> 45337e0f5e84442bf64d0dc728cc40e7ec46fc6a
         
         try {
             logger.debug("Triggering pipeline with variables: {}", mergedVariables);
