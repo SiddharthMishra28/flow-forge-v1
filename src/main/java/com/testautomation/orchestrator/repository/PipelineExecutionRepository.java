@@ -16,6 +16,8 @@ import java.util.UUID;
 @Repository
 public interface PipelineExecutionRepository extends JpaRepository<PipelineExecution, Long> {
     
+    java.util.Optional<PipelineExecution> findTopByFlowExecutionIdAndFlowStepIdOrderByCreatedAtAsc(UUID flowExecutionId, Long flowStepId);
+    
     List<PipelineExecution> findByFlowExecutionId(UUID flowExecutionId);
     
     Page<PipelineExecution> findByFlowExecutionId(UUID flowExecutionId, Pageable pageable);

@@ -38,6 +38,9 @@ public class FlowExecutionService {
     private PipelineExecutionRepository pipelineExecutionRepository;
 
     @Autowired
+    private PipelineExecutionTxService pipelineExecutionTxService;
+
+    @Autowired
     private FlowRepository flowRepository;
 
     @Autowired
@@ -240,6 +243,7 @@ public class FlowExecutionService {
         FlowExecution flowExecution = new FlowExecution(flowId, new HashMap<>());
         flowExecution = flowExecutionRepository.save(flowExecution);
         
+<<<<<<< HEAD
         // Create placeholder pipeline execution records immediately for each flow step
         createPlaceholderPipelineExecutions(flowExecution, flow);
         
@@ -355,6 +359,27 @@ public class FlowExecutionService {
 
         logger.info("Successfully created replay pipeline executions ({} copied successful, {} new placeholders) for flow execution: {}",
                    failedStepIndex, flow.getFlowStepIds().size() - failedStepIndex, replayExecution.getId());
+=======
+        // Pre-create placeholder PipelineExecution records for immediate visibility
+        List<Long> stepIds = flow.getFlowStepIds();
+        for (Long stepId : stepIds) {
+            FlowStep step = flowStepRepository.findById(stepId)
+                    .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
+            PipelineExecution placeholder = new PipelineExecution();
+            placeholder.setFlowId(flowId);
+            placeholder.setFlowExecutionId(flowExecution.getId());
+            placeholder.setFlowStepId(stepId);
+            // Pre-populate configured test data so clients can see inputs early
+            placeholder.setConfiguredTestData(testDataService.mergeTestDataByIds(step.getTestDataIds()));
+            placeholder.setRuntimeTestData(null);
+            placeholder.setStatus(ExecutionStatus.SCHEDULED);
+            placeholder.setStartTime(null);
+            pipelineExecutionTxService.saveNew(placeholder);
+        }
+        
+        logger.info("Created flow execution with ID: {} and pre-created {} pipeline placeholders", flowExecution.getId(), stepIds.size());
+        return convertToDto(flowExecution);
+>>>>>>> d8441bf0dff18c294f5b66c3e840cb7b7e1bb4ca
     }
 
     @Async("flowExecutionTaskExecutor")
@@ -464,13 +489,79 @@ public class FlowExecutionService {
         
         // Create new flow execution record for replay
         FlowExecution replayExecution = new FlowExecution(originalExecution.getFlowId(), accumulatedRuntimeVariables);
+        replayExecution.setIsReplay(true);
+        replayExecution.setOriginalFlowExecutionId(originalFlowExecutionId);
         replayExecution = flowExecutionRepository.save(replayExecution);
         
+<<<<<<< HEAD
         // Create placeholder pipeline execution records for replay (copy successful steps, create placeholders for re-execution)
         createReplayPlaceholderPipelineExecutions(replayExecution, flow, failedFlowStepId, originalFlowExecutionId);
         
         logger.info("Created replay flow execution with ID: {} for original execution: {}", replayExecution.getId(), originalFlowExecutionId);
         return convertToDtoWithDetails(replayExecution);
+=======
+        // Build a map of original successful pipelines before the failed step (by flowStepId)
+        int failedStepIndex = flow.getFlowStepIds().indexOf(failedFlowStepId);
+        List<PipelineExecution> originalPipelinesOrdered = pipelineExecutionRepository
+                .findByFlowExecutionIdOrderByCreatedAt(originalFlowExecutionId);
+        Map<Long, PipelineExecution> originalPassedByStep = originalPipelinesOrdered.stream()
+                .filter(pe -> pe.getStatus() == ExecutionStatus.PASSED)
+                .collect(Collectors.toMap(PipelineExecution::getFlowStepId, pe -> pe, (a, b) -> a));
+
+        // 1) Pre-create "carried" entries for steps BEFORE the failed step, mark PASSED and reference original pipeline/job
+        for (int i = 0; i < failedStepIndex; i++) {
+            Long stepId = flow.getFlowStepIds().get(i);
+            FlowStep step = flowStepRepository.findById(stepId)
+                    .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
+
+            PipelineExecution originalPe = originalPassedByStep.get(stepId);
+            PipelineExecution carried = new PipelineExecution();
+            carried.setFlowId(replayExecution.getFlowId());
+            carried.setFlowExecutionId(replayExecution.getId());
+            carried.setFlowStepId(stepId);
+            // preserve inputs/outputs from original successful step
+            if (originalPe != null) {
+                carried.setConfiguredTestData(originalPe.getConfiguredTestData());
+                carried.setRuntimeTestData(originalPe.getRuntimeTestData());
+                carried.setPipelineId(originalPe.getPipelineId());
+                carried.setPipelineUrl(originalPe.getPipelineUrl());
+                carried.setJobId(originalPe.getJobId());
+                carried.setJobUrl(originalPe.getJobUrl());
+                carried.setStartTime(originalPe.getStartTime());
+                carried.setEndTime(originalPe.getEndTime());
+            } else {
+                // Fallback to current config if no original found
+                carried.setConfiguredTestData(testDataService.mergeTestDataByIds(step.getTestDataIds()));
+                carried.setRuntimeTestData(new HashMap<>(accumulatedRuntimeVariables));
+            }
+            carried.setStatus(ExecutionStatus.PASSED);
+            carried.setIsReplay(true);
+            carried.setOriginalFlowExecutionId(originalFlowExecutionId);
+            pipelineExecutionTxService.saveNew(carried);
+        }
+
+        // 2) Pre-create placeholders only for steps from failedStep onwards
+        for (int i = failedStepIndex; i < flow.getFlowStepIds().size(); i++) {
+            Long stepId = flow.getFlowStepIds().get(i);
+            FlowStep step = flowStepRepository.findById(stepId)
+                    .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
+            PipelineExecution placeholder = new PipelineExecution();
+            placeholder.setFlowId(replayExecution.getFlowId());
+            placeholder.setFlowExecutionId(replayExecution.getId());
+            placeholder.setFlowStepId(stepId);
+            placeholder.setConfiguredTestData(testDataService.mergeTestDataByIds(step.getTestDataIds()));
+            // Seed with accumulated variables present at replay start
+            placeholder.setRuntimeTestData(new HashMap<>(accumulatedRuntimeVariables));
+            placeholder.setStatus(ExecutionStatus.SCHEDULED);
+            placeholder.setStartTime(null);
+            placeholder.setIsReplay(true);
+            placeholder.setOriginalFlowExecutionId(originalFlowExecutionId);
+            pipelineExecutionTxService.saveNew(placeholder);
+        }
+        
+        logger.info("Created replay flow execution with ID: {} for original execution: {} and pre-created placeholders from step {} onward", replayExecution.getId(), originalFlowExecutionId, failedFlowStepId);
+        return convertToDto(replayExecution);
+>>>>>>> d8441bf0dff18c294f5b66c3e840cb7b7e1bb4ca
     }
 
     @Async("flowExecutionTaskExecutor")
@@ -607,6 +698,7 @@ public class FlowExecutionService {
             logger.debug("Added testTag '{}' to replay pipeline variables for step {}", step.getTestTag(), step.getId());
         }
 
+<<<<<<< HEAD
         // Find existing placeholder pipeline execution for this replay step
         PipelineExecution pipelineExecution = pipelineExecutionRepository
                 .findByFlowExecutionIdOrderByCreatedAt(flowExecution.getId())
@@ -621,6 +713,40 @@ public class FlowExecutionService {
         pipelineExecution.setRuntimeTestData(pipelineVariables);
         
         pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+=======
+<<<<<<< HEAD
+        // Reuse pre-created placeholder if available; otherwise create
+        PipelineExecution pipelineExecution = pipelineExecutionRepository
+                .findTopByFlowExecutionIdAndFlowStepIdOrderByCreatedAtAsc(flowExecution.getId(), step.getId())
+                .filter(pe -> pe.getPipelineId() == null)
+                .orElseGet(() -> {
+                    PipelineExecution pe = new PipelineExecution();
+                    pe.setFlowId(flowExecution.getFlowId());
+                    pe.setFlowExecutionId(flowExecution.getId());
+                    pe.setFlowStepId(step.getId());
+                    return pe;
+                });
+        // Ensure inputs are set/updated just before triggering
+        pipelineExecution.setConfiguredTestData(testDataService.mergeTestDataByIds(step.getTestDataIds()));
+        pipelineExecution.setRuntimeTestData(pipelineVariables);
+        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
+        if (pipelineExecution.getStartTime() == null) {
+            pipelineExecution.setStartTime(LocalDateTime.now());
+        }
+=======
+        // Create pipeline execution record with replay flag
+        PipelineExecution pipelineExecution = new PipelineExecution(
+                flowExecution.getFlowId(),
+                flowExecution.getId(),
+                step.getId(),
+                testDataService.mergeTestDataByIds(step.getTestDataIds()),
+                pipelineVariables
+        );
+>>>>>>> 45337e0f5e84442bf64d0dc728cc40e7ec46fc6a
+        pipelineExecution.setIsReplay(true);
+        pipelineExecution.setOriginalFlowExecutionId(originalFlowExecutionId);
+        pipelineExecution = pipelineExecutionTxService.saveUpdate(pipelineExecution);
+>>>>>>> d8441bf0dff18c294f5b66c3e840cb7b7e1bb4ca
         
         try {
             logger.debug("Triggering REPLAY pipeline with variables: {}", mergedVariables);
@@ -705,6 +831,7 @@ public class FlowExecutionService {
             logger.debug("Added testTag '{}' to pipeline variables for step {}", step.getTestTag(), step.getId());
         }
 
+<<<<<<< HEAD
         // Find the existing placeholder pipeline execution for this step
         PipelineExecution pipelineExecution = pipelineExecutionRepository
                 .findByFlowExecutionIdOrderByCreatedAt(flowExecution.getId())
@@ -718,7 +845,39 @@ public class FlowExecutionService {
         pipelineExecution.setStartTime(LocalDateTime.now());
         pipelineExecution.setRuntimeTestData(pipelineVariables);
         
+=======
+<<<<<<< HEAD
+        // Reuse pre-created placeholder if available; otherwise create
+        PipelineExecution pipelineExecution = pipelineExecutionRepository
+                .findTopByFlowExecutionIdAndFlowStepIdOrderByCreatedAtAsc(flowExecution.getId(), step.getId())
+                .filter(pe -> pe.getPipelineId() == null)
+                .orElseGet(() -> {
+                    PipelineExecution pe = new PipelineExecution();
+                    pe.setFlowId(flowExecution.getFlowId());
+                    pe.setFlowExecutionId(flowExecution.getId());
+                    pe.setFlowStepId(step.getId());
+                    return pe;
+                });
+        // Ensure inputs are set/updated just before triggering
+        pipelineExecution.setConfiguredTestData(testDataService.mergeTestDataByIds(step.getTestDataIds()));
+        pipelineExecution.setRuntimeTestData(pipelineVariables);
+        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
+        if (pipelineExecution.getStartTime() == null) {
+            pipelineExecution.setStartTime(LocalDateTime.now());
+        }
+        pipelineExecution = pipelineExecutionTxService.saveUpdate(pipelineExecution);
+=======
+        // Create pipeline execution record
+        PipelineExecution pipelineExecution = new PipelineExecution(
+                flowExecution.getFlowId(),
+                flowExecution.getId(),
+                step.getId(),
+                testDataService.mergeTestDataByIds(step.getTestDataIds()),
+                pipelineVariables
+        );
+>>>>>>> d8441bf0dff18c294f5b66c3e840cb7b7e1bb4ca
         pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+>>>>>>> 45337e0f5e84442bf64d0dc728cc40e7ec46fc6a
         
         try {
             logger.debug("Triggering pipeline with variables: {}", mergedVariables);
@@ -948,6 +1107,8 @@ public class FlowExecutionService {
         dto.setRuntimeVariables(entity.getRuntimeVariables());
         dto.setStatus(entity.getStatus());
         dto.setCreatedAt(entity.getCreatedAt());
+        dto.setIsReplay(entity.getIsReplay());
+        dto.setOriginalFlowExecutionId(entity.getOriginalFlowExecutionId());
         return dto;
     }
 
@@ -968,8 +1129,8 @@ public class FlowExecutionService {
             dto.setApplications(applications.stream().map(this::convertApplicationToDto).collect(Collectors.toList()));
         });
         
-        // Load pipeline executions (including replays)
-        List<PipelineExecution> pipelineExecutions = pipelineExecutionRepository.findByFlowExecutionIdIncludingReplays(entity.getId());
+        // Load pipeline executions ONLY for this flow execution (exclude replays linked to others)
+        List<PipelineExecution> pipelineExecutions = pipelineExecutionRepository.findByFlowExecutionId(entity.getId());
         dto.setPipelineExecutions(pipelineExecutions.stream().map(this::convertPipelineExecutionToDto).collect(Collectors.toList()));
         
         return dto;
