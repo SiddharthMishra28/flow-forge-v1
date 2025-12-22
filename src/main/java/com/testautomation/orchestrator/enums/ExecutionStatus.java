@@ -1,6 +1,7 @@
 package com.testautomation.orchestrator.enums;
 
 public enum ExecutionStatus {
+    PENDING,
     RUNNING,
     PASSED,
     FAILED,

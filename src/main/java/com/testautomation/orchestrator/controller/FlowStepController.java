@@ -1,6 +1,7 @@
 package com.testautomation.orchestrator.controller;
 
 import com.testautomation.orchestrator.dto.CombinedFlowStepDto;
+import com.testautomation.orchestrator.dto.FlowStepCreateDto;
 import com.testautomation.orchestrator.service.CombinedFlowStepService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,18 +33,18 @@ public class FlowStepController {
     private CombinedFlowStepService combinedFlowStepService;
 
     @PostMapping
-    @Operation(summary = "Create a new flow step", description = "Create a new flow step configuration with embedded test data")
+    @Operation(summary = "Create a new flow step", description = "Create a new flow step configuration referencing existing test data by IDs")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Flow step created successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "404", description = "Referenced application not found")
+            @ApiResponse(responseCode = "404", description = "Referenced application or test data not found")
     })
     public ResponseEntity<CombinedFlowStepDto> createFlowStep(
-            @Valid @RequestBody CombinedFlowStepDto flowStepDto) {
+            @Valid @RequestBody FlowStepCreateDto flowStepDto) {
         logger.info("Creating new flow step for application ID: {}", flowStepDto.getApplicationId());
         
         try {
-            CombinedFlowStepDto createdFlowStep = combinedFlowStepService.createFlowStep(flowStepDto);
+            CombinedFlowStepDto createdFlowStep = combinedFlowStepService.createFlowStepFromCreateDto(flowStepDto);
             return new ResponseEntity<>(createdFlowStep, HttpStatus.CREATED);
         } catch (IllegalArgumentException e) {
             logger.error("Failed to create flow step: {}", e.getMessage());
@@ -114,19 +115,19 @@ public class FlowStepController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Update flow step", description = "Update an existing flow step with embedded test data")
+    @Operation(summary = "Update flow step", description = "Update an existing flow step referencing existing test data by IDs")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Flow step updated successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "404", description = "Flow step or referenced application not found")
+            @ApiResponse(responseCode = "404", description = "Flow step, referenced application, or test data not found")
     })
     public ResponseEntity<CombinedFlowStepDto> updateFlowStep(
             @Parameter(description = "Flow step ID") @PathVariable Long id,
-            @Valid @RequestBody CombinedFlowStepDto flowStepDto) {
+            @Valid @RequestBody FlowStepCreateDto flowStepDto) {
         logger.info("Updating flow step with ID: {}", id);
         
         try {
-            CombinedFlowStepDto updatedFlowStep = combinedFlowStepService.updateFlowStep(id, flowStepDto);
+            CombinedFlowStepDto updatedFlowStep = combinedFlowStepService.updateFlowStepFromCreateDto(id, flowStepDto);
             return ResponseEntity.ok(updatedFlowStep);
         } catch (IllegalArgumentException e) {
             logger.error("Failed to update flow step: {}", e.getMessage());

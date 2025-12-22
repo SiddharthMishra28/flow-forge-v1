@@ -9,15 +9,20 @@ import com.testautomation.orchestrator.util.OutputEnvParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Collectors;
 
 @Service
@@ -56,6 +61,174 @@ public class FlowExecutionService {
     @Autowired
     private com.testautomation.orchestrator.config.GitLabConfig gitLabConfig;
 
+    @Autowired(required = false)
+    @Qualifier("flowExecutionTaskExecutor")
+    private ThreadPoolTaskExecutor flowExecutionTaskExecutor;
+
+    public Map<String, Object> executeMultipleFlows(String flowIdsParam) {
+        logger.info("Processing multiple flow execution request: {}", flowIdsParam);
+        
+        // Parse and validate flow IDs
+        List<Long> flowIds = parseAndValidateFlowIds(flowIdsParam);
+        
+        // Get current thread pool status (handle test environment where executor might be null)
+        int activeThreads = 0;
+        int maxThreads = 20; // default
+        int queueSize = 0;
+        int availableCapacity = 20; // default
+        
+        if (flowExecutionTaskExecutor != null) {
+            activeThreads = flowExecutionTaskExecutor.getActiveCount();
+            maxThreads = flowExecutionTaskExecutor.getMaxPoolSize();
+            queueSize = flowExecutionTaskExecutor.getThreadPoolExecutor().getQueue().size();
+            availableCapacity = (maxThreads - activeThreads) + 
+                                (flowExecutionTaskExecutor.getThreadPoolExecutor().getQueue().remainingCapacity());
+        } else {
+            logger.warn("ThreadPoolTaskExecutor not available (likely test environment), using default capacity values");
+        }
+        
+        logger.info("Thread pool status - Active: {}, Max: {}, Queue Size: {}, Available Capacity: {}", 
+                   activeThreads, maxThreads, queueSize, availableCapacity);
+        
+        // Create flow executions synchronously first, then start async execution
+        List<FlowExecutionDto> acceptedExecutions = new ArrayList<>();
+        List<Map<String, Object>> rejected = new ArrayList<>();
+        
+        for (int i = 0; i < flowIds.size(); i++) {
+            Long flowId = flowIds.get(i);
+            
+            if (i < availableCapacity) {
+                try {
+                    // Create the flow execution record synchronously to get the UUID and details
+                    // This only creates the database record, no GitLab interaction yet
+                    FlowExecutionDto executionDto = createFlowExecution(flowId);
+                    acceptedExecutions.add(executionDto);
+                    
+                    logger.info("Flow {} accepted for execution with ID: {}", flowId, executionDto.getId());
+                } catch (IllegalArgumentException e) {
+                    logger.error("Flow {} rejected during creation: {}", flowId, e.getMessage());
+                    Map<String, Object> rejectedFlow = new HashMap<>();
+                    rejectedFlow.put("flowId", flowId);
+                    rejectedFlow.put("status", "rejected");
+                    rejectedFlow.put("reason", "flow_not_found");
+                    rejectedFlow.put("message", e.getMessage());
+                    rejected.add(rejectedFlow);
+                }
+            } else {
+                Map<String, Object> rejectedFlow = new HashMap<>();
+                rejectedFlow.put("flowId", flowId);
+                rejectedFlow.put("status", "rejected");
+                rejectedFlow.put("reason", "thread_pool_capacity");
+                rejectedFlow.put("message", "Thread pool at capacity, flow execution rejected");
+                rejected.add(rejectedFlow);
+                
+                logger.warn("Flow {} rejected due to thread pool capacity", flowId);
+            }
+        }
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("summary", Map.of(
+            "total_requested", flowIds.size(),
+            "accepted", acceptedExecutions.size(),
+            "rejected", rejected.size()
+        ));
+        result.put("accepted", acceptedExecutions);  // Now contains FlowExecutionDto objects
+        result.put("rejected", rejected);
+        result.put("thread_pool_status", Map.of(
+            "active_threads", activeThreads,
+            "max_threads", maxThreads,
+            "queue_size", queueSize,
+            "available_capacity", availableCapacity
+        ));
+        
+        logger.info("Multiple flow execution request processed immediately - Accepted: {}, Rejected: {}", acceptedExecutions.size(), rejected.size());
+        return result;
+    }
+
+
+    public Page<FlowExecutionDto> searchExecutionsByFlowIds(String flowIdsParam, String term, Pageable pageable) {
+        logger.debug("Searching executions for multiple flows: {} with term '{}'", flowIdsParam, term);
+        List<Long> flowIds = parseAndValidateFlowIds(flowIdsParam);
+        Page<FlowExecution> page = flowExecutionRepository.searchByFlowIds(flowIds, term, pageable);
+        List<FlowExecutionDto> dtos = page.getContent().stream().map(this::convertToDtoWithDetails).collect(Collectors.toList());
+        return new PageImpl<>(dtos, pageable, page.getTotalElements());
+    }
+
+    public Page<FlowExecutionDto> getMultipleFlowExecutions(String flowIdsParam, Pageable pageable) {
+        logger.debug("Fetching executions for multiple flows: {}", flowIdsParam);
+
+        // Parse and validate flow IDs
+        List<Long> flowIds = parseAndValidateFlowIds(flowIdsParam);
+
+        // Get all executions for the specified flows
+        Page<FlowExecution> executionsPage = flowExecutionRepository.findByFlowIdIn(flowIds, pageable);
+
+        // Convert to DTOs with full details (flow, flowSteps, applications, pipelineExecutions)
+        List<FlowExecutionDto> executionDtos = executionsPage.getContent().stream()
+                .map(this::convertToDtoWithDetails)
+                .collect(Collectors.toList());
+
+        logger.debug("Found {} executions for flows: {}", executionDtos.size(), flowIds);
+
+        return new PageImpl<>(executionDtos, pageable, executionsPage.getTotalElements());
+    }
+
+    public Page<FlowExecutionDto> searchAllFlowExecutions(String term, Pageable pageable) {
+        logger.debug("Searching all flow executions with term: '{}' and pagination: {}", term, pageable);
+        Page<FlowExecution> page = flowExecutionRepository.searchAll(term, pageable);
+        List<FlowExecutionDto> dtos = page.getContent().stream().map(this::convertToDtoWithDetails).collect(Collectors.toList());
+        return new PageImpl<>(dtos, pageable, page.getTotalElements());
+    }
+
+    public Page<FlowExecutionDto> getAllFlowExecutions(Pageable pageable) {
+        logger.debug("Fetching all flow executions with pagination: {}", pageable);
+
+        // Get all executions
+        Page<FlowExecution> executionsPage = flowExecutionRepository.findAll(pageable);
+
+        // Convert to DTOs with full details (flow, flowSteps, applications, pipelineExecutions)
+        List<FlowExecutionDto> executionDtos = executionsPage.getContent().stream()
+                .map(this::convertToDtoWithDetails)
+                .collect(Collectors.toList());
+
+        logger.debug("Found {} total executions", executionDtos.size());
+
+        return new PageImpl<>(executionDtos, pageable, executionsPage.getTotalElements());
+    }
+
+    private List<Long> parseAndValidateFlowIds(String flowIdsParam) {
+        if (flowIdsParam == null || flowIdsParam.trim().isEmpty()) {
+            throw new IllegalArgumentException("Flow IDs parameter cannot be empty");
+        }
+        
+        List<Long> flowIds = new ArrayList<>();
+        String[] idStrings = flowIdsParam.split(",");
+        
+        for (String idString : idStrings) {
+            try {
+                Long flowId = Long.parseLong(idString.trim());
+                if (flowId <= 0) {
+                    throw new IllegalArgumentException("Flow ID must be a positive number: " + flowId);
+                }
+                flowIds.add(flowId);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid flow ID format: " + idString.trim());
+            }
+        }
+        
+        if (flowIds.isEmpty()) {
+            throw new IllegalArgumentException("No valid flow IDs provided");
+        }
+        
+        // Remove duplicates while preserving order
+        List<Long> uniqueFlowIds = flowIds.stream().distinct().collect(Collectors.toList());
+        
+        if (uniqueFlowIds.size() != flowIds.size()) {
+            logger.info("Removed {} duplicate flow IDs from request", flowIds.size() - uniqueFlowIds.size());
+        }
+        
+        return uniqueFlowIds;
+    }
 
     public FlowExecutionDto createFlowExecution(Long flowId) {
         logger.info("Creating flow execution for flow ID: {}", flowId);
@@ -67,8 +240,121 @@ public class FlowExecutionService {
         FlowExecution flowExecution = new FlowExecution(flowId, new HashMap<>());
         flowExecution = flowExecutionRepository.save(flowExecution);
         
-        logger.info("Created flow execution with ID: {}", flowExecution.getId());
-        return convertToDto(flowExecution);
+        // Create placeholder pipeline execution records immediately for each flow step
+        createPlaceholderPipelineExecutions(flowExecution, flow);
+        
+        logger.info("Created flow execution with ID: {} and placeholder pipeline executions", flowExecution.getId());
+        return convertToDtoWithDetails(flowExecution);
+    }
+
+    private void createPlaceholderPipelineExecutions(FlowExecution flowExecution, Flow flow) {
+        logger.info("Creating placeholder pipeline executions for flow execution ID: {} with {} steps", 
+                   flowExecution.getId(), flow.getFlowStepIds().size());
+        
+        for (int i = 0; i < flow.getFlowStepIds().size(); i++) {
+            Long stepId = flow.getFlowStepIds().get(i);
+            FlowStep step = flowStepRepository.findById(stepId)
+                    .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
+            
+            // Create placeholder pipeline execution with minimal data
+            PipelineExecution placeholderPipeline = new PipelineExecution(
+                    flowExecution.getFlowId(),
+                    flowExecution.getId(),
+                    step.getId(),
+                    testDataService.mergeTestDataByIds(step.getTestDataIds()),
+                    new HashMap<>() // Empty runtime variables initially
+            );
+            
+            // Set status to PENDING to indicate it's waiting for actual execution
+            placeholderPipeline.setStatus(ExecutionStatus.PENDING);
+            
+            // Don't set pipelineId, pipelineUrl, jobId, jobUrl yet - these will be set when actual pipeline is triggered
+            placeholderPipeline.setStartTime(null);
+            placeholderPipeline.setEndTime(null);
+            
+            placeholderPipeline = pipelineExecutionRepository.save(placeholderPipeline);
+            
+            logger.debug("Created placeholder pipeline execution ID: {} for step: {} in flow execution: {}", 
+                        placeholderPipeline.getId(), stepId, flowExecution.getId());
+        }
+        
+        logger.info("Successfully created {} placeholder pipeline executions for flow execution: {}", 
+                   flow.getFlowStepIds().size(), flowExecution.getId());
+    }
+
+    private void createReplayPlaceholderPipelineExecutions(FlowExecution replayExecution, Flow flow, Long failedFlowStepId, UUID originalFlowExecutionId) {
+        logger.info("Creating replay placeholder pipeline executions for flow execution ID: {} from step: {}",
+                   replayExecution.getId(), failedFlowStepId);
+
+        int failedStepIndex = flow.getFlowStepIds().indexOf(failedFlowStepId);
+
+        // Get successful pipeline executions from the original execution
+        List<PipelineExecution> originalPipelines = pipelineExecutionRepository.findByFlowExecutionIdOrderByCreatedAt(originalFlowExecutionId);
+
+        for (int i = 0; i < flow.getFlowStepIds().size(); i++) {
+            Long stepId = flow.getFlowStepIds().get(i);
+            FlowStep step = flowStepRepository.findById(stepId)
+                    .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
+
+            if (i < failedStepIndex) {
+                // Copy successful pipeline executions from original execution
+                PipelineExecution originalPipeline = originalPipelines.stream()
+                        .filter(pe -> pe.getFlowStepId().equals(stepId) && pe.getStatus() == ExecutionStatus.PASSED)
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("No successful pipeline execution found for step: " + stepId));
+
+                // Create a copy of the successful pipeline execution for the replay
+                PipelineExecution copiedPipeline = new PipelineExecution(
+                        replayExecution.getFlowId(),
+                        replayExecution.getId(),
+                        stepId,
+                        originalPipeline.getConfiguredTestData(),
+                        originalPipeline.getRuntimeTestData()
+                );
+
+                // Copy all data from original successful execution
+                copiedPipeline.setStatus(ExecutionStatus.PASSED);
+                copiedPipeline.setPipelineId(originalPipeline.getPipelineId());
+                copiedPipeline.setPipelineUrl(originalPipeline.getPipelineUrl());
+                copiedPipeline.setJobId(originalPipeline.getJobId());
+                copiedPipeline.setJobUrl(originalPipeline.getJobUrl());
+                copiedPipeline.setStartTime(originalPipeline.getStartTime());
+                copiedPipeline.setEndTime(originalPipeline.getEndTime());
+                copiedPipeline.setIsReplay(false); // This is from original execution, not replay
+                copiedPipeline.setOriginalFlowExecutionId(originalFlowExecutionId); // Reference to original
+
+                copiedPipeline = pipelineExecutionRepository.save(copiedPipeline);
+
+                logger.debug("Copied successful pipeline execution ID: {} for step: {} in replay flow execution: {}",
+                            copiedPipeline.getId(), stepId, replayExecution.getId());
+            } else {
+                // Create new placeholder for steps that will be re-executed
+                PipelineExecution placeholderPipeline = new PipelineExecution(
+                        replayExecution.getFlowId(),
+                        replayExecution.getId(),
+                        step.getId(),
+                        testDataService.mergeTestDataByIds(step.getTestDataIds()),
+                        new HashMap<>() // Empty runtime variables initially
+                );
+
+                // Set status to PENDING to indicate it's waiting for actual execution
+                placeholderPipeline.setStatus(ExecutionStatus.PENDING);
+                placeholderPipeline.setIsReplay(true); // This step will be re-executed in replay
+                placeholderPipeline.setOriginalFlowExecutionId(originalFlowExecutionId); // Reference to original
+
+                // Don't set pipelineId, pipelineUrl, jobId, jobUrl yet - these will be set when actual pipeline is triggered
+                placeholderPipeline.setStartTime(null);
+                placeholderPipeline.setEndTime(null);
+
+                placeholderPipeline = pipelineExecutionRepository.save(placeholderPipeline);
+
+                logger.debug("Created replay placeholder pipeline execution ID: {} for step: {} in flow execution: {}",
+                            placeholderPipeline.getId(), stepId, replayExecution.getId());
+            }
+        }
+
+        logger.info("Successfully created replay pipeline executions ({} copied successful, {} new placeholders) for flow execution: {}",
+                   failedStepIndex, flow.getFlowStepIds().size() - failedStepIndex, replayExecution.getId());
     }
 
     @Async("flowExecutionTaskExecutor")
@@ -180,8 +466,11 @@ public class FlowExecutionService {
         FlowExecution replayExecution = new FlowExecution(originalExecution.getFlowId(), accumulatedRuntimeVariables);
         replayExecution = flowExecutionRepository.save(replayExecution);
         
+        // Create placeholder pipeline execution records for replay (copy successful steps, create placeholders for re-execution)
+        createReplayPlaceholderPipelineExecutions(replayExecution, flow, failedFlowStepId, originalFlowExecutionId);
+        
         logger.info("Created replay flow execution with ID: {} for original execution: {}", replayExecution.getId(), originalFlowExecutionId);
-        return convertToDto(replayExecution);
+        return convertToDtoWithDetails(replayExecution);
     }
 
     @Async("flowExecutionTaskExecutor")
@@ -211,6 +500,12 @@ public class FlowExecutionService {
 
                 Application application = applicationRepository.findById(step.getApplicationId())
                         .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + step.getApplicationId()));
+
+                // Only execute pipeline steps from failed step onwards - skip successful steps
+                if (i < failedStepIndex) {
+                    logger.debug("Skipping successful step {} in replay execution", stepId);
+                    continue;
+                }
 
                 // Prepare variables for this pipeline: FlowStep TestData + Accumulated Runtime
                 Map<String, String> pipelineVariables = new HashMap<>();
@@ -298,24 +593,33 @@ public class FlowExecutionService {
         return accumulatedVariables;
     }
 
-    private PipelineExecution executeReplayPipelineStep(FlowExecution flowExecution, FlowStep step, 
-                                                       Application application, Map<String, String> pipelineVariables, 
+    private PipelineExecution executeReplayPipelineStep(FlowExecution flowExecution, FlowStep step,
+                                                       Application application, Map<String, String> pipelineVariables,
                                                        UUID originalFlowExecutionId) {
         logger.info("Executing REPLAY pipeline step: {} for flow execution: {}", step.getId(), flowExecution.getId());
-        
+
         // Use the already merged pipeline variables (Global + FlowStep + Runtime)
         Map<String, String> mergedVariables = new HashMap<>(pipelineVariables);
+
+        // Add the testTag from FlowStep to make it available in GitLab pipeline scope
+        if (step.getTestTag() != null && !step.getTestTag().trim().isEmpty()) {
+            mergedVariables.put("testTag", step.getTestTag());
+            logger.debug("Added testTag '{}' to replay pipeline variables for step {}", step.getTestTag(), step.getId());
+        }
+
+        // Find existing placeholder pipeline execution for this replay step
+        PipelineExecution pipelineExecution = pipelineExecutionRepository
+                .findByFlowExecutionIdOrderByCreatedAt(flowExecution.getId())
+                .stream()
+                .filter(pe -> pe.getFlowStepId().equals(step.getId()) && pe.getStatus() == ExecutionStatus.PENDING)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No pending replay pipeline execution found for step: " + step.getId()));
+
+        // Update placeholder with actual execution data
+        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
+        pipelineExecution.setStartTime(LocalDateTime.now());
+        pipelineExecution.setRuntimeTestData(pipelineVariables);
         
-        // Create pipeline execution record with replay flag
-        PipelineExecution pipelineExecution = new PipelineExecution(
-                flowExecution.getFlowId(),
-                flowExecution.getId(),
-                step.getId(),
-                testDataService.mergeTestDataByIds(step.getTestDataIds()),
-                pipelineVariables
-        );
-        pipelineExecution.setIsReplay(true);
-        pipelineExecution.setOriginalFlowExecutionId(originalFlowExecutionId);
         pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
         
         try {
@@ -388,21 +692,32 @@ public class FlowExecutionService {
         return pipelineExecution;
     }
 
-    private PipelineExecution executePipelineStep(FlowExecution flowExecution, FlowStep step, 
+    private PipelineExecution executePipelineStep(FlowExecution flowExecution, FlowStep step,
                                                  Application application, Map<String, String> pipelineVariables) {
         logger.info("Executing pipeline step: {} for flow execution: {}", step.getId(), flowExecution.getId());
-        
+
         // Use the already merged pipeline variables (Global + FlowStep + Runtime)
         Map<String, String> mergedVariables = new HashMap<>(pipelineVariables);
+
+        // Add the testTag from FlowStep to make it available in GitLab pipeline scope
+        if (step.getTestTag() != null && !step.getTestTag().trim().isEmpty()) {
+            mergedVariables.put("testTag", step.getTestTag());
+            logger.debug("Added testTag '{}' to pipeline variables for step {}", step.getTestTag(), step.getId());
+        }
+
+        // Find the existing placeholder pipeline execution for this step
+        PipelineExecution pipelineExecution = pipelineExecutionRepository
+                .findByFlowExecutionIdOrderByCreatedAt(flowExecution.getId())
+                .stream()
+                .filter(pe -> pe.getFlowStepId().equals(step.getId()) && pe.getStatus() == ExecutionStatus.PENDING)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No pending pipeline execution found for step: " + step.getId()));
+
+        // Update the placeholder with actual execution data
+        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
+        pipelineExecution.setStartTime(LocalDateTime.now());
+        pipelineExecution.setRuntimeTestData(pipelineVariables);
         
-        // Create pipeline execution record
-        PipelineExecution pipelineExecution = new PipelineExecution(
-                flowExecution.getFlowId(),
-                flowExecution.getId(),
-                step.getId(),
-                testDataService.mergeTestDataByIds(step.getTestDataIds()),
-                pipelineVariables
-        );
         pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
         
         try {
@@ -495,26 +810,32 @@ public class FlowExecutionService {
                 }
                 
                 if (targetJob != null) {
-                    logger.info("Found target job {} in stage {} for pipeline {}", 
+                    logger.info("Found target job {} in stage {} for pipeline {}",
                                targetJob.getId(), targetJob.getStage(), pipelineExecution.getPipelineId());
-                    
+
+                    // Set job information
+                    pipelineExecution.setJobId(targetJob.getId());
+                    pipelineExecution.setJobUrl(targetJob.getWebUrl());
+                    pipelineExecutionRepository.save(pipelineExecution);
+
                     // Download output.env from target/output.env
                     String artifactContent = gitLabApiClient
                             .downloadJobArtifact(gitlabBaseUrl, application.getGitlabProjectId(),
                                                targetJob.getId(), applicationService.getDecryptedPersonalAccessToken(application.getId()), "target/output.env")
                             .block();
-                    
+
                     if (artifactContent != null && !artifactContent.trim().isEmpty()) {
                         Map<String, String> parsedVariables = outputEnvParser.parseOutputEnv(artifactContent);
                         pipelineExecution.setRuntimeTestData(parsedVariables);
-                        logger.info("Successfully downloaded and parsed artifacts from job {}: {} variables", 
+                        pipelineExecutionRepository.save(pipelineExecution);
+                        logger.info("Successfully downloaded and parsed artifacts from job {}: {} variables",
                                    targetJob.getId(), parsedVariables.size());
                     } else {
-                        logger.info("No artifact content found in job {}, continuing without runtime data", 
+                        logger.info("No artifact content found in job {}, continuing without runtime data",
                                    targetJob.getId());
                     }
                 } else {
-                    logger.info("No successful job found for stage '{}' in pipeline {}", 
+                    logger.info("No successful job found for stage '{}' in pipeline {}",
                                step.getTestStage(), pipelineExecution.getPipelineId());
                 }
             } else {
@@ -659,6 +980,7 @@ public class FlowExecutionService {
         dto.setId(entity.getId());
         dto.setFlowStepIds(entity.getFlowStepIds());
         dto.setSquashTestCaseId(entity.getSquashTestCaseId());
+        dto.setSquashTestCase(entity.getSquashTestCase());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
@@ -675,6 +997,29 @@ public class FlowExecutionService {
         dto.setTestDataIds(entity.getTestDataIds());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
+        
+        // Handle optional invokeScheduler
+        if (entity.getInvokeScheduler() != null) {
+            dto.setInvokeScheduler(convertInvokeSchedulerEntityToDto(entity.getInvokeScheduler()));
+        }
+        
+        return dto;
+    }
+
+    private com.testautomation.orchestrator.dto.InvokeSchedulerDto convertInvokeSchedulerEntityToDto(com.testautomation.orchestrator.model.InvokeScheduler entity) {
+        if (entity == null) return null;
+        
+        com.testautomation.orchestrator.dto.InvokeSchedulerDto dto = new com.testautomation.orchestrator.dto.InvokeSchedulerDto();
+        dto.setType(entity.getType());
+        
+        if (entity.getTimer() != null) {
+            com.testautomation.orchestrator.dto.TimerDto timerDto = new com.testautomation.orchestrator.dto.TimerDto();
+            timerDto.setMinutes(entity.getTimer().getMinutes());
+            timerDto.setHours(entity.getTimer().getHours());
+            timerDto.setDays(entity.getTimer().getDays());
+            dto.setTimer(timerDto);
+        }
+        
         return dto;
     }
 
@@ -701,6 +1046,8 @@ public class FlowExecutionService {
         dto.setFlowStepId(entity.getFlowStepId());
         dto.setPipelineId(entity.getPipelineId());
         dto.setPipelineUrl(entity.getPipelineUrl());
+        dto.setJobId(entity.getJobId());
+        dto.setJobUrl(entity.getJobUrl());
         dto.setStartTime(entity.getStartTime());
         dto.setEndTime(entity.getEndTime());
         dto.setConfiguredTestData(entity.getConfiguredTestData());

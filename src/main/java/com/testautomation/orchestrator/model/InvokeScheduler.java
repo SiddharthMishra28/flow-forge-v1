@@ -8,14 +8,12 @@ import jakarta.validation.constraints.Pattern;
 @Embeddable
 public class InvokeScheduler {
 
-    @NotNull
     @Pattern(regexp = "^(scheduled|delayed)$", message = "Type must be either 'scheduled' or 'delayed'")
-    @Column(name = "scheduler_type", nullable = false)
+    @Column(name = "scheduler_type", nullable = true)
     private String type;
 
     @Embedded
     @Valid
-    @NotNull
     private Timer timer;
 
     // Constructors

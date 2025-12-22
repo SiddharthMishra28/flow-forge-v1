@@ -54,9 +54,34 @@ public class TestDataService {
                 .collect(Collectors.toList());
     }
 
+    public List<TestDataDto> getAllTestData(Long applicationId) {
+        if (applicationId != null) {
+            if (!applicationRepository.existsById(applicationId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid applicationId: " + applicationId);
+            }
+            return testDataRepository.findByApplicationId(applicationId).stream()
+                    .map(this::convertToDto)
+                    .collect(Collectors.toList());
+        } else {
+            return getAllTestData();
+        }
+    }
+
     public Page<TestDataDto> getAllTestData(Pageable pageable) {
         return testDataRepository.findAll(pageable)
                 .map(this::convertToDto);
+    }
+
+    public Page<TestDataDto> getAllTestData(Pageable pageable, Long applicationId) {
+        if (applicationId != null) {
+            if (!applicationRepository.existsById(applicationId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid applicationId: " + applicationId);
+            }
+            return testDataRepository.findByApplicationId(applicationId, pageable)
+                    .map(this::convertToDto);
+        } else {
+            return getAllTestData(pageable);
+        }
     }
 
     public TestDataDto updateTestData(Long dataId, TestDataDto testDataDto) {

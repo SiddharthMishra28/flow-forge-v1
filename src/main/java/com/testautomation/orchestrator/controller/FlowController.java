@@ -1,6 +1,7 @@
 package com.testautomation.orchestrator.controller;
 
 import com.testautomation.orchestrator.dto.CombinedFlowDto;
+import com.testautomation.orchestrator.dto.FlowCreateDto;
 import com.testautomation.orchestrator.dto.FlowTestCaseAssociationDto;
 import com.testautomation.orchestrator.service.CombinedFlowService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,17 +34,17 @@ public class FlowController {
     private CombinedFlowService combinedFlowService;
 
     @PostMapping
-    @Operation(summary = "Create a new flow", description = "Create a new test automation flow with embedded flow steps and test data")
+    @Operation(summary = "Create a new flow", description = "Create a new test automation flow with flow steps referencing existing test data by IDs")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Flow created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data or referenced applications not found")
+            @ApiResponse(responseCode = "400", description = "Invalid input data or referenced applications/test data not found")
     })
     public ResponseEntity<CombinedFlowDto> createFlow(
-            @Valid @RequestBody CombinedFlowDto combinedFlowDto) {
-        logger.info("Creating new combined flow with {} steps", combinedFlowDto.getFlowSteps().size());
+            @Valid @RequestBody FlowCreateDto flowCreateDto) {
+        logger.info("Creating new flow with {} steps", flowCreateDto.getFlowSteps().size());
         
         try {
-            CombinedFlowDto createdFlow = combinedFlowService.createCombinedFlow(combinedFlowDto);
+            CombinedFlowDto createdFlow = combinedFlowService.createFlowFromCreateDto(flowCreateDto);
             return new ResponseEntity<>(createdFlow, HttpStatus.CREATED);
         } catch (IllegalArgumentException e) {
             logger.error("Failed to create flow: {}", e.getMessage());
@@ -67,14 +68,14 @@ public class FlowController {
     }
 
     @GetMapping
-    @Operation(summary = "Get all flows", description = "Retrieve all flows with embedded flow steps and test data. Supports pagination and sorting.")
+    @Operation(summary = "Get all flows", description = "Retrieve all flows with embedded flow steps and test data. Supports pagination and sorting with default sorting by updatedAt in descending order.")
     @ApiResponse(responseCode = "200", description = "Flows retrieved successfully")
     public ResponseEntity<?> getAllFlows(
             @Parameter(description = "Filter by Squash test case ID") @RequestParam(required = false) Long squashTestCaseId,
             @Parameter(description = "Page number (0-based)") @RequestParam(required = false) Integer page,
             @Parameter(description = "Page size") @RequestParam(required = false) Integer size,
             @Parameter(description = "Sort by field (e.g., 'id', 'createdAt', 'updatedAt')") @RequestParam(required = false) String sortBy,
-            @Parameter(description = "Sort direction (ASC or DESC)") @RequestParam(required = false, defaultValue = "ASC") String sortDirection) {
+            @Parameter(description = "Sort direction (ASC or DESC)") @RequestParam(required = false) String sortDirection) {
         
         logger.debug("Fetching combined flows with squashTestCaseId filter: {}, page: {}, size: {}, sortBy: {}, sortDirection: {}", 
                     squashTestCaseId, page, size, sortBy, sortDirection);
@@ -84,10 +85,15 @@ public class FlowController {
             int pageNumber = page != null ? page : 0;
             int pageSize = size != null ? size : 20; // default page size
             
-            Sort sort = Sort.unsorted();
+            Sort sort;
             if (sortBy != null && !sortBy.trim().isEmpty()) {
-                Sort.Direction direction = Sort.Direction.fromString(sortDirection);
+                // Use provided sort field and direction
+                Sort.Direction direction = sortDirection != null ? 
+                    Sort.Direction.fromString(sortDirection) : Sort.Direction.DESC;
                 sort = Sort.by(direction, sortBy);
+            } else {
+                // Default sort: updatedAt DESC
+                sort = Sort.by(Sort.Direction.DESC, "updatedAt");
             }
             
             Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
@@ -102,31 +108,44 @@ public class FlowController {
             return ResponseEntity.ok(flowsPage);
         } else {
             // Return all data without pagination (backward compatibility)
-            List<CombinedFlowDto> flows;
-            if (squashTestCaseId != null) {
-                flows = combinedFlowService.getCombinedFlowsBySquashTestCaseId(squashTestCaseId);
+            // Apply default sorting (updatedAt DESC) even without pagination
+            Sort sort;
+            if (sortBy != null && !sortBy.trim().isEmpty()) {
+                // Use provided sort field and direction
+                Sort.Direction direction = sortDirection != null ? 
+                    Sort.Direction.fromString(sortDirection) : Sort.Direction.DESC;
+                sort = Sort.by(direction, sortBy);
             } else {
-                flows = combinedFlowService.getAllCombinedFlows();
+                // Default sort: updatedAt DESC
+                sort = Sort.by(Sort.Direction.DESC, "updatedAt");
             }
             
-            return ResponseEntity.ok(flows);
+            Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sort);
+            Page<CombinedFlowDto> flowsPage;
+            if (squashTestCaseId != null) {
+                flowsPage = combinedFlowService.getCombinedFlowsBySquashTestCaseId(squashTestCaseId, pageable);
+            } else {
+                flowsPage = combinedFlowService.getAllCombinedFlows(pageable);
+            }
+            
+            return ResponseEntity.ok(flowsPage.getContent());
         }
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Update flow", description = "Update an existing flow with embedded flow steps and test data")
+    @Operation(summary = "Update flow", description = "Update an existing flow with flow steps referencing existing test data by IDs")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Flow updated successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data or referenced applications not found"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data or referenced applications/test data not found"),
             @ApiResponse(responseCode = "404", description = "Flow not found")
     })
     public ResponseEntity<CombinedFlowDto> updateFlow(
             @Parameter(description = "Flow ID") @PathVariable Long id,
-            @Valid @RequestBody CombinedFlowDto combinedFlowDto) {
-        logger.info("Updating combined flow with ID: {}", id);
+            @Valid @RequestBody FlowCreateDto flowCreateDto) {
+        logger.info("Updating flow with ID: {}", id);
         
         try {
-            CombinedFlowDto updatedFlow = combinedFlowService.updateCombinedFlow(id, combinedFlowDto);
+            CombinedFlowDto updatedFlow = combinedFlowService.updateFlowFromCreateDto(id, flowCreateDto);
             return ResponseEntity.ok(updatedFlow);
         } catch (IllegalArgumentException e) {
             logger.error("Failed to update flow: {}", e.getMessage());

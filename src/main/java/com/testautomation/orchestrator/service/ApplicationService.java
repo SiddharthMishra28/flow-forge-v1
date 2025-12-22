@@ -324,6 +324,7 @@ public class ApplicationService {
         dto.setProjectName(entity.getProjectName());
         dto.setProjectUrl(entity.getProjectUrl());
         dto.setTokenStatus(entity.getTokenStatus());
+        dto.setTokenValidationLastUpdateDate(entity.getTokenValidationLastUpdateDate());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

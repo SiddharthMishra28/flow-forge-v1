@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -35,8 +36,13 @@ public class TokenValidationScheduler {
     @Transactional
     public void validateAllTokensScheduled() {
         logger.info("Starting scheduled token validation job...");
-        
+
         try {
+            // Update the token validation timestamp for all applications
+            LocalDateTime validationTimestamp = LocalDateTime.now();
+            int updatedCount = applicationRepository.updateTokenValidationLastUpdateDateForAll(validationTimestamp);
+            logger.info("Updated token validation timestamp for {} applications", updatedCount);
+
             List<Application> applications = applicationRepository.findAll();
             logger.info("Found {} applications to validate", applications.size());
             

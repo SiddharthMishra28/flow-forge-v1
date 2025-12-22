@@ -20,9 +20,22 @@ public class InvokeSchedulerValidator implements ConstraintValidator<ValidInvoke
         String type = invokeSchedulerDto.getType();
         TimerDto timer = invokeSchedulerDto.getTimer();
 
+        // If type is null, then timer should also be null (both required when scheduler is provided)
+        if (type == null && timer == null) {
+            return true; // Both null is valid for optional scheduler
+        }
+        
+        // If one is provided, both must be provided
+        if (type == null) {
+            context.disableDefaultConstraintViolation();
+            context.buildConstraintViolationWithTemplate("Type is required when timer is provided.")
+                   .addPropertyNode("type").addConstraintViolation();
+            return false;
+        }
+        
         if (timer == null) {
             context.disableDefaultConstraintViolation();
-            context.buildConstraintViolationWithTemplate("Timer configuration is required when invokeScheduler is provided.")
+            context.buildConstraintViolationWithTemplate("Timer configuration is required when type is provided.")
                    .addPropertyNode("timer").addConstraintViolation();
             return false;
         }
