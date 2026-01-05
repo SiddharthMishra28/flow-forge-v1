@@ -70,43 +70,43 @@ public class FlowExecutionService {
 
     public Map<String, Object> executeMultipleFlows(String flowIdsParam) {
         logger.info("Processing multiple flow execution request: {}", flowIdsParam);
-        
+
         // Parse and validate flow IDs
         List<Long> flowIds = parseAndValidateFlowIds(flowIdsParam);
-        
+
         // Get current thread pool status (handle test environment where executor might be null)
         int activeThreads = 0;
         int maxThreads = 20; // default
         int queueSize = 0;
         int availableCapacity = 20; // default
-        
+
         if (flowExecutionTaskExecutor != null) {
             activeThreads = flowExecutionTaskExecutor.getActiveCount();
             maxThreads = flowExecutionTaskExecutor.getMaxPoolSize();
             queueSize = flowExecutionTaskExecutor.getThreadPoolExecutor().getQueue().size();
-            availableCapacity = (maxThreads - activeThreads) + 
+            availableCapacity = (maxThreads - activeThreads) +
                                 (flowExecutionTaskExecutor.getThreadPoolExecutor().getQueue().remainingCapacity());
         } else {
             logger.warn("ThreadPoolTaskExecutor not available (likely test environment), using default capacity values");
         }
-        
-        logger.info("Thread pool status - Active: {}, Max: {}, Queue Size: {}, Available Capacity: {}", 
+
+        logger.info("Thread pool status - Active: {}, Max: {}, Queue Size: {}, Available Capacity: {}",
                    activeThreads, maxThreads, queueSize, availableCapacity);
-        
+
         // Create flow executions synchronously first, then start async execution
         List<FlowExecutionDto> acceptedExecutions = new ArrayList<>();
         List<Map<String, Object>> rejected = new ArrayList<>();
-        
+
         for (int i = 0; i < flowIds.size(); i++) {
             Long flowId = flowIds.get(i);
-            
+
             if (i < availableCapacity) {
                 try {
                     // Create the flow execution record synchronously to get the UUID and details
                     // This only creates the database record, no GitLab interaction yet
                     FlowExecutionDto executionDto = createFlowExecution(flowId);
                     acceptedExecutions.add(executionDto);
-                    
+
                     logger.info("Flow {} accepted for execution with ID: {}", flowId, executionDto.getId());
                 } catch (IllegalArgumentException e) {
                     logger.error("Flow {} rejected during creation: {}", flowId, e.getMessage());
@@ -124,11 +124,11 @@ public class FlowExecutionService {
                 rejectedFlow.put("reason", "thread_pool_capacity");
                 rejectedFlow.put("message", "Thread pool at capacity, flow execution rejected");
                 rejected.add(rejectedFlow);
-                
+
                 logger.warn("Flow {} rejected due to thread pool capacity", flowId);
             }
         }
-        
+
         Map<String, Object> result = new HashMap<>();
         result.put("summary", Map.of(
             "total_requested", flowIds.size(),
@@ -143,7 +143,7 @@ public class FlowExecutionService {
             "queue_size", queueSize,
             "available_capacity", availableCapacity
         ));
-        
+
         logger.info("Multiple flow execution request processed immediately - Accepted: {}, Rejected: {}", acceptedExecutions.size(), rejected.size());
         return result;
     }
@@ -203,10 +203,10 @@ public class FlowExecutionService {
         if (flowIdsParam == null || flowIdsParam.trim().isEmpty()) {
             throw new IllegalArgumentException("Flow IDs parameter cannot be empty");
         }
-        
+
         List<Long> flowIds = new ArrayList<>();
         String[] idStrings = flowIdsParam.split(",");
-        
+
         for (String idString : idStrings) {
             try {
                 Long flowId = Long.parseLong(idString.trim());
@@ -218,148 +218,31 @@ public class FlowExecutionService {
                 throw new IllegalArgumentException("Invalid flow ID format: " + idString.trim());
             }
         }
-        
+
         if (flowIds.isEmpty()) {
             throw new IllegalArgumentException("No valid flow IDs provided");
         }
-        
+
         // Remove duplicates while preserving order
         List<Long> uniqueFlowIds = flowIds.stream().distinct().collect(Collectors.toList());
-        
+
         if (uniqueFlowIds.size() != flowIds.size()) {
             logger.info("Removed {} duplicate flow IDs from request", flowIds.size() - uniqueFlowIds.size());
         }
-        
+
         return uniqueFlowIds;
     }
 
     public FlowExecutionDto createFlowExecution(Long flowId) {
         logger.info("Creating flow execution for flow ID: {}", flowId);
-        
+
         Flow flow = flowRepository.findById(flowId)
                 .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + flowId));
-        
+
         // Create flow execution record
         FlowExecution flowExecution = new FlowExecution(flowId, new HashMap<>());
         flowExecution = flowExecutionRepository.save(flowExecution);
-        
-<<<<<<< HEAD
-        // Create placeholder pipeline execution records immediately for each flow step
-        createPlaceholderPipelineExecutions(flowExecution, flow);
-        
-        logger.info("Created flow execution with ID: {} and placeholder pipeline executions", flowExecution.getId());
-        return convertToDtoWithDetails(flowExecution);
-    }
 
-    private void createPlaceholderPipelineExecutions(FlowExecution flowExecution, Flow flow) {
-        logger.info("Creating placeholder pipeline executions for flow execution ID: {} with {} steps", 
-                   flowExecution.getId(), flow.getFlowStepIds().size());
-        
-        for (int i = 0; i < flow.getFlowStepIds().size(); i++) {
-            Long stepId = flow.getFlowStepIds().get(i);
-            FlowStep step = flowStepRepository.findById(stepId)
-                    .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
-            
-            // Create placeholder pipeline execution with minimal data
-            PipelineExecution placeholderPipeline = new PipelineExecution(
-                    flowExecution.getFlowId(),
-                    flowExecution.getId(),
-                    step.getId(),
-                    testDataService.mergeTestDataByIds(step.getTestDataIds()),
-                    new HashMap<>() // Empty runtime variables initially
-            );
-            
-            // Set status to PENDING to indicate it's waiting for actual execution
-            placeholderPipeline.setStatus(ExecutionStatus.PENDING);
-            
-            // Don't set pipelineId, pipelineUrl, jobId, jobUrl yet - these will be set when actual pipeline is triggered
-            placeholderPipeline.setStartTime(null);
-            placeholderPipeline.setEndTime(null);
-            
-            placeholderPipeline = pipelineExecutionRepository.save(placeholderPipeline);
-            
-            logger.debug("Created placeholder pipeline execution ID: {} for step: {} in flow execution: {}", 
-                        placeholderPipeline.getId(), stepId, flowExecution.getId());
-        }
-        
-        logger.info("Successfully created {} placeholder pipeline executions for flow execution: {}", 
-                   flow.getFlowStepIds().size(), flowExecution.getId());
-    }
-
-    private void createReplayPlaceholderPipelineExecutions(FlowExecution replayExecution, Flow flow, Long failedFlowStepId, UUID originalFlowExecutionId) {
-        logger.info("Creating replay placeholder pipeline executions for flow execution ID: {} from step: {}",
-                   replayExecution.getId(), failedFlowStepId);
-
-        int failedStepIndex = flow.getFlowStepIds().indexOf(failedFlowStepId);
-
-        // Get successful pipeline executions from the original execution
-        List<PipelineExecution> originalPipelines = pipelineExecutionRepository.findByFlowExecutionIdOrderByCreatedAt(originalFlowExecutionId);
-
-        for (int i = 0; i < flow.getFlowStepIds().size(); i++) {
-            Long stepId = flow.getFlowStepIds().get(i);
-            FlowStep step = flowStepRepository.findById(stepId)
-                    .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
-
-            if (i < failedStepIndex) {
-                // Copy successful pipeline executions from original execution
-                PipelineExecution originalPipeline = originalPipelines.stream()
-                        .filter(pe -> pe.getFlowStepId().equals(stepId) && pe.getStatus() == ExecutionStatus.PASSED)
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalArgumentException("No successful pipeline execution found for step: " + stepId));
-
-                // Create a copy of the successful pipeline execution for the replay
-                PipelineExecution copiedPipeline = new PipelineExecution(
-                        replayExecution.getFlowId(),
-                        replayExecution.getId(),
-                        stepId,
-                        originalPipeline.getConfiguredTestData(),
-                        originalPipeline.getRuntimeTestData()
-                );
-
-                // Copy all data from original successful execution
-                copiedPipeline.setStatus(ExecutionStatus.PASSED);
-                copiedPipeline.setPipelineId(originalPipeline.getPipelineId());
-                copiedPipeline.setPipelineUrl(originalPipeline.getPipelineUrl());
-                copiedPipeline.setJobId(originalPipeline.getJobId());
-                copiedPipeline.setJobUrl(originalPipeline.getJobUrl());
-                copiedPipeline.setStartTime(originalPipeline.getStartTime());
-                copiedPipeline.setEndTime(originalPipeline.getEndTime());
-                copiedPipeline.setIsReplay(false); // This is from original execution, not replay
-                copiedPipeline.setOriginalFlowExecutionId(originalFlowExecutionId); // Reference to original
-
-                copiedPipeline = pipelineExecutionRepository.save(copiedPipeline);
-
-                logger.debug("Copied successful pipeline execution ID: {} for step: {} in replay flow execution: {}",
-                            copiedPipeline.getId(), stepId, replayExecution.getId());
-            } else {
-                // Create new placeholder for steps that will be re-executed
-                PipelineExecution placeholderPipeline = new PipelineExecution(
-                        replayExecution.getFlowId(),
-                        replayExecution.getId(),
-                        step.getId(),
-                        testDataService.mergeTestDataByIds(step.getTestDataIds()),
-                        new HashMap<>() // Empty runtime variables initially
-                );
-
-                // Set status to PENDING to indicate it's waiting for actual execution
-                placeholderPipeline.setStatus(ExecutionStatus.PENDING);
-                placeholderPipeline.setIsReplay(true); // This step will be re-executed in replay
-                placeholderPipeline.setOriginalFlowExecutionId(originalFlowExecutionId); // Reference to original
-
-                // Don't set pipelineId, pipelineUrl, jobId, jobUrl yet - these will be set when actual pipeline is triggered
-                placeholderPipeline.setStartTime(null);
-                placeholderPipeline.setEndTime(null);
-
-                placeholderPipeline = pipelineExecutionRepository.save(placeholderPipeline);
-
-                logger.debug("Created replay placeholder pipeline execution ID: {} for step: {} in flow execution: {}",
-                            placeholderPipeline.getId(), stepId, replayExecution.getId());
-            }
-        }
-
-        logger.info("Successfully created replay pipeline executions ({} copied successful, {} new placeholders) for flow execution: {}",
-                   failedStepIndex, flow.getFlowStepIds().size() - failedStepIndex, replayExecution.getId());
-=======
         // Pre-create placeholder PipelineExecution records for immediate visibility
         List<Long> stepIds = flow.getFlowStepIds();
         for (Long stepId : stepIds) {
@@ -376,10 +259,9 @@ public class FlowExecutionService {
             placeholder.setStartTime(null);
             pipelineExecutionTxService.saveNew(placeholder);
         }
-        
+
         logger.info("Created flow execution with ID: {} and pre-created {} pipeline placeholders", flowExecution.getId(), stepIds.size());
         return convertToDto(flowExecution);
->>>>>>> d8441bf0dff18c294f5b66c3e840cb7b7e1bb4ca
     }
 
     @Async("flowExecutionTaskExecutor")
@@ -468,38 +350,31 @@ public class FlowExecutionService {
 
     public FlowExecutionDto createReplayFlowExecution(UUID originalFlowExecutionId, Long failedFlowStepId) {
         logger.info("Creating replay flow execution for original execution: {} from failed step: {}", originalFlowExecutionId, failedFlowStepId);
-        
+
         FlowExecution originalExecution = flowExecutionRepository.findById(originalFlowExecutionId)
                 .orElseThrow(() -> new IllegalArgumentException("Original flow execution not found with ID: " + originalFlowExecutionId));
-        
+
         if (originalExecution.getStatus() != ExecutionStatus.FAILED) {
             throw new IllegalArgumentException("Can only replay failed flow executions");
         }
-        
+
         Flow flow = flowRepository.findById(originalExecution.getFlowId())
                 .orElseThrow(() -> new IllegalArgumentException("Flow not found with ID: " + originalExecution.getFlowId()));
-        
+
         // Validate that the failed step exists in the flow
         if (!flow.getFlowStepIds().contains(failedFlowStepId)) {
             throw new IllegalArgumentException("Failed flow step ID " + failedFlowStepId + " is not part of flow " + flow.getId());
         }
-        
+
         // Get all successful pipeline executions up to the failed step to extract runtime variables
         Map<String, String> accumulatedRuntimeVariables = extractRuntimeVariablesUpToStep(originalFlowExecutionId, failedFlowStepId, flow);
-        
+
         // Create new flow execution record for replay
         FlowExecution replayExecution = new FlowExecution(originalExecution.getFlowId(), accumulatedRuntimeVariables);
         replayExecution.setIsReplay(true);
         replayExecution.setOriginalFlowExecutionId(originalFlowExecutionId);
         replayExecution = flowExecutionRepository.save(replayExecution);
-        
-<<<<<<< HEAD
-        // Create placeholder pipeline execution records for replay (copy successful steps, create placeholders for re-execution)
-        createReplayPlaceholderPipelineExecutions(replayExecution, flow, failedFlowStepId, originalFlowExecutionId);
-        
-        logger.info("Created replay flow execution with ID: {} for original execution: {}", replayExecution.getId(), originalFlowExecutionId);
-        return convertToDtoWithDetails(replayExecution);
-=======
+
         // Build a map of original successful pipelines before the failed step (by flowStepId)
         int failedStepIndex = flow.getFlowStepIds().indexOf(failedFlowStepId);
         List<PipelineExecution> originalPipelinesOrdered = pipelineExecutionRepository
@@ -558,10 +433,9 @@ public class FlowExecutionService {
             placeholder.setOriginalFlowExecutionId(originalFlowExecutionId);
             pipelineExecutionTxService.saveNew(placeholder);
         }
-        
+
         logger.info("Created replay flow execution with ID: {} for original execution: {} and pre-created placeholders from step {} onward", replayExecution.getId(), originalFlowExecutionId, failedFlowStepId);
         return convertToDto(replayExecution);
->>>>>>> d8441bf0dff18c294f5b66c3e840cb7b7e1bb4ca
     }
 
     @Async("flowExecutionTaskExecutor")
@@ -657,10 +531,10 @@ public class FlowExecutionService {
 
     private Map<String, String> extractRuntimeVariablesUpToStep(UUID originalFlowExecutionId, Long failedFlowStepId, Flow flow) {
         Map<String, String> accumulatedVariables = new HashMap<>();
-        
+
         // Get the index of the failed step
         int failedStepIndex = flow.getFlowStepIds().indexOf(failedFlowStepId);
-        
+
         // Get all successful pipeline executions from the original flow execution up to (but not including) the failed step
         List<PipelineExecution> successfulPipelines = pipelineExecutionRepository.findByFlowExecutionIdOrderByCreatedAt(originalFlowExecutionId)
                 .stream()
@@ -670,17 +544,17 @@ public class FlowExecutionService {
                     return stepIndex < failedStepIndex;
                 })
                 .collect(Collectors.toList());
-        
+
         // Accumulate runtime variables from successful steps in order
         for (PipelineExecution pipeline : successfulPipelines) {
             if (pipeline.getRuntimeTestData() != null) {
                 accumulatedVariables.putAll(pipeline.getRuntimeTestData());
             }
         }
-        
+
         logger.info("Extracted {} runtime variables from {} successful steps before failed step {}", 
                    accumulatedVariables.size(), successfulPipelines.size(), failedFlowStepId);
-        
+
         return accumulatedVariables;
     }
 
@@ -698,42 +572,6 @@ public class FlowExecutionService {
             logger.debug("Added testTag '{}' to replay pipeline variables for step {}", step.getTestTag(), step.getId());
         }
 
-<<<<<<< HEAD
-        // Find existing placeholder pipeline execution for this replay step
-        PipelineExecution pipelineExecution = pipelineExecutionRepository
-                .findByFlowExecutionIdOrderByCreatedAt(flowExecution.getId())
-                .stream()
-                .filter(pe -> pe.getFlowStepId().equals(step.getId()) && pe.getStatus() == ExecutionStatus.PENDING)
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("No pending replay pipeline execution found for step: " + step.getId()));
-
-        // Update placeholder with actual execution data
-        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
-        pipelineExecution.setStartTime(LocalDateTime.now());
-        pipelineExecution.setRuntimeTestData(pipelineVariables);
-        
-        pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
-=======
-<<<<<<< HEAD
-        // Reuse pre-created placeholder if available; otherwise create
-        PipelineExecution pipelineExecution = pipelineExecutionRepository
-                .findTopByFlowExecutionIdAndFlowStepIdOrderByCreatedAtAsc(flowExecution.getId(), step.getId())
-                .filter(pe -> pe.getPipelineId() == null)
-                .orElseGet(() -> {
-                    PipelineExecution pe = new PipelineExecution();
-                    pe.setFlowId(flowExecution.getFlowId());
-                    pe.setFlowExecutionId(flowExecution.getId());
-                    pe.setFlowStepId(step.getId());
-                    return pe;
-                });
-        // Ensure inputs are set/updated just before triggering
-        pipelineExecution.setConfiguredTestData(testDataService.mergeTestDataByIds(step.getTestDataIds()));
-        pipelineExecution.setRuntimeTestData(pipelineVariables);
-        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
-        if (pipelineExecution.getStartTime() == null) {
-            pipelineExecution.setStartTime(LocalDateTime.now());
-        }
-=======
         // Create pipeline execution record with replay flag
         PipelineExecution pipelineExecution = new PipelineExecution(
                 flowExecution.getFlowId(),
@@ -742,12 +580,10 @@ public class FlowExecutionService {
                 testDataService.mergeTestDataByIds(step.getTestDataIds()),
                 pipelineVariables
         );
->>>>>>> 45337e0f5e84442bf64d0dc728cc40e7ec46fc6a
         pipelineExecution.setIsReplay(true);
         pipelineExecution.setOriginalFlowExecutionId(originalFlowExecutionId);
         pipelineExecution = pipelineExecutionTxService.saveUpdate(pipelineExecution);
->>>>>>> d8441bf0dff18c294f5b66c3e840cb7b7e1bb4ca
-        
+
         try {
             logger.debug("Triggering REPLAY pipeline with variables: {}", mergedVariables);
             
@@ -831,42 +667,6 @@ public class FlowExecutionService {
             logger.debug("Added testTag '{}' to pipeline variables for step {}", step.getTestTag(), step.getId());
         }
 
-<<<<<<< HEAD
-        // Find the existing placeholder pipeline execution for this step
-        PipelineExecution pipelineExecution = pipelineExecutionRepository
-                .findByFlowExecutionIdOrderByCreatedAt(flowExecution.getId())
-                .stream()
-                .filter(pe -> pe.getFlowStepId().equals(step.getId()) && pe.getStatus() == ExecutionStatus.PENDING)
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("No pending pipeline execution found for step: " + step.getId()));
-
-        // Update the placeholder with actual execution data
-        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
-        pipelineExecution.setStartTime(LocalDateTime.now());
-        pipelineExecution.setRuntimeTestData(pipelineVariables);
-        
-=======
-<<<<<<< HEAD
-        // Reuse pre-created placeholder if available; otherwise create
-        PipelineExecution pipelineExecution = pipelineExecutionRepository
-                .findTopByFlowExecutionIdAndFlowStepIdOrderByCreatedAtAsc(flowExecution.getId(), step.getId())
-                .filter(pe -> pe.getPipelineId() == null)
-                .orElseGet(() -> {
-                    PipelineExecution pe = new PipelineExecution();
-                    pe.setFlowId(flowExecution.getFlowId());
-                    pe.setFlowExecutionId(flowExecution.getId());
-                    pe.setFlowStepId(step.getId());
-                    return pe;
-                });
-        // Ensure inputs are set/updated just before triggering
-        pipelineExecution.setConfiguredTestData(testDataService.mergeTestDataByIds(step.getTestDataIds()));
-        pipelineExecution.setRuntimeTestData(pipelineVariables);
-        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
-        if (pipelineExecution.getStartTime() == null) {
-            pipelineExecution.setStartTime(LocalDateTime.now());
-        }
-        pipelineExecution = pipelineExecutionTxService.saveUpdate(pipelineExecution);
-=======
         // Create pipeline execution record
         PipelineExecution pipelineExecution = new PipelineExecution(
                 flowExecution.getFlowId(),
@@ -875,10 +675,8 @@ public class FlowExecutionService {
                 testDataService.mergeTestDataByIds(step.getTestDataIds()),
                 pipelineVariables
         );
->>>>>>> d8441bf0dff18c294f5b66c3e840cb7b7e1bb4ca
         pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
->>>>>>> 45337e0f5e84442bf64d0dc728cc40e7ec46fc6a
-        
+
         try {
             logger.debug("Triggering pipeline with variables: {}", mergedVariables);
             
