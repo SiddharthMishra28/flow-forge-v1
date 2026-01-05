@@ -47,8 +47,8 @@ flow-execution:
   # Pipeline status polling interval during flow execution in milliseconds
   # This controls how frequently the system checks if running pipelines have completed
   # Lower values = more responsive status updates but higher API load
-  # Default: 5000ms (5 seconds) - very responsive for real-time status updates
-  polling-interval: ${FLOW_EXECUTION_POLLING_INTERVAL:5000}
+  # Default: 15000ms (15 seconds)
+  polling-interval: ${FLOW_EXECUTION_POLLING_INTERVAL:15000}
 
 # Scheduling Configuration
 scheduling:
