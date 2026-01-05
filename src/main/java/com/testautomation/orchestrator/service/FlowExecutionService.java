@@ -64,6 +64,9 @@ public class FlowExecutionService {
     @Autowired
     private com.testautomation.orchestrator.config.GitLabConfig gitLabConfig;
 
+    @org.springframework.beans.factory.annotation.Value("${scheduling.pipeline-status.polling-interval:60000}")
+    private long pipelinePollingIntervalMs;
+
     @Autowired(required = false)
     @Qualifier("flowExecutionTaskExecutor")
     private ThreadPoolTaskExecutor flowExecutionTaskExecutor;
@@ -261,9 +264,9 @@ public class FlowExecutionService {
             placeholder.setRuntimeTestData(null);
 
             if (i == 0) {
-                // Trigger the first pipeline synchronously
-                logger.info("Triggering first pipeline synchronously for step: {}", stepId);
-                PipelineExecution firstPipeline = triggerPipelineSynchronously(flowExecution, step, placeholder);
+                // Trigger the first pipeline asynchronously (return immediately after getting pipelineId/pipelineUrl)
+                logger.info("Triggering first pipeline asynchronously for step: {}", stepId);
+                PipelineExecution firstPipeline = triggerPipelineAsynchronously(flowExecution, step, placeholder);
                 pipelineExecutions.add(firstPipeline);
             } else {
                 // Create placeholder for subsequent steps
@@ -274,14 +277,15 @@ public class FlowExecutionService {
             }
         }
 
-        logger.info("Created flow execution with ID: {} and triggered first pipeline synchronously", flowExecution.getId());
+        logger.info("Created flow execution with ID: {} and triggered first pipeline asynchronously", flowExecution.getId());
         return convertToDtoWithDetails(flowExecution);
     }
 
     /**
-     * Trigger the first pipeline synchronously to provide immediate feedback
+     * Trigger the first pipeline and return immediately once we have pipelineId/pipelineUrl
+     * Completion polling happens asynchronously
      */
-    private PipelineExecution triggerPipelineSynchronously(FlowExecution flowExecution, FlowStep step, PipelineExecution pipelineExecution) {
+    private PipelineExecution triggerPipelineAsynchronously(FlowExecution flowExecution, FlowStep step, PipelineExecution pipelineExecution) {
         try {
             Application application = applicationRepository.findById(step.getApplicationId())
                     .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + step.getApplicationId()));
@@ -345,8 +349,7 @@ public class FlowExecutionService {
 
                     logger.info("First pipeline triggered successfully: {} for step {}", response.getId(), step.getId());
 
-                    // Start polling for completion asynchronously
-                    pollPipelineCompletionAsync(pipelineExecution, application, gitLabConfig.getBaseUrl(), step);
+                    // Note: Polling for completion will be handled by executeFlowAsync
 
                 } else {
                     logger.error("Failed to trigger first pipeline - null response from GitLab API");
@@ -391,8 +394,8 @@ public class FlowExecutionService {
                     break;
                 }
 
-                // Wait before next poll
-                Thread.sleep(30000); // 30 seconds
+                // Wait before next poll - configurable via application.yml
+                Thread.sleep(pipelinePollingIntervalMs);
             }
         } catch (Exception e) {
             logger.error("Error polling first pipeline completion: {}", e.getMessage(), e);
@@ -1018,8 +1021,8 @@ public class FlowExecutionService {
                     break;
                 }
                 
-                // Wait before next poll
-                Thread.sleep(30000); // 30 seconds
+                // Wait before next poll - configurable via application.yml
+                Thread.sleep(pipelinePollingIntervalMs);
             }
         } catch (Exception e) {
             logger.error("Error polling pipeline completion: {}", e.getMessage(), e);
@@ -1122,8 +1125,6 @@ public class FlowExecutionService {
                 placeholder.setFlowStepId(stepId);
                 placeholder.setPipelineId(null);
                 placeholder.setPipelineUrl(null);
-                placeholder.setJobId(null);
-                placeholder.setJobUrl(null);
                 placeholder.setStartTime(null);
                 placeholder.setEndTime(null);
                 // Set configured test data (what will be used as input)
