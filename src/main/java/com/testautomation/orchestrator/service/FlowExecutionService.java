@@ -261,7 +261,7 @@ public class FlowExecutionService {
         }
 
         logger.info("Created flow execution with ID: {} and pre-created {} pipeline placeholders", flowExecution.getId(), stepIds.size());
-        return convertToDto(flowExecution);
+        return convertToDtoWithDetails(flowExecution);
     }
 
     @Async("flowExecutionTaskExecutor")
@@ -668,12 +668,13 @@ public class FlowExecutionService {
         }
 
         // Create pipeline execution record
+        Map<String, String> configuredTestData = testDataService.mergeTestDataByIds(step.getTestDataIds());
         PipelineExecution pipelineExecution = new PipelineExecution(
                 flowExecution.getFlowId(),
                 flowExecution.getId(),
                 step.getId(),
-                testDataService.mergeTestDataByIds(step.getTestDataIds()),
-                pipelineVariables
+                configuredTestData,
+                null // runtimeTestData starts as null, will be populated with artifacts
         );
         pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
 
@@ -783,13 +784,24 @@ public class FlowExecutionService {
 
                     if (artifactContent != null && !artifactContent.trim().isEmpty()) {
                         Map<String, String> parsedVariables = outputEnvParser.parseOutputEnv(artifactContent);
-                        pipelineExecution.setRuntimeTestData(parsedVariables);
+
+                        // Merge configured test data with artifact data
+                        Map<String, String> runtimeTestData = new HashMap<>();
+                        if (pipelineExecution.getConfiguredTestData() != null) {
+                            runtimeTestData.putAll(pipelineExecution.getConfiguredTestData());
+                        }
+                        runtimeTestData.putAll(parsedVariables); // Artifact data can override configured data
+
+                        pipelineExecution.setRuntimeTestData(runtimeTestData);
                         pipelineExecutionRepository.save(pipelineExecution);
-                        logger.info("Successfully downloaded and parsed artifacts from job {}: {} variables",
-                                   targetJob.getId(), parsedVariables.size());
+                        logger.info("Successfully downloaded and parsed artifacts from job {}: {} variables (total runtime: {})",
+                                   targetJob.getId(), parsedVariables.size(), runtimeTestData.size());
                     } else {
-                        logger.info("No artifact content found in job {}, continuing without runtime data",
+                        logger.info("No artifact content found in job {}, runtime data will remain as configured data",
                                    targetJob.getId());
+                        // Set runtime data to configured data if no artifacts
+                        pipelineExecution.setRuntimeTestData(pipelineExecution.getConfiguredTestData());
+                        pipelineExecutionRepository.save(pipelineExecution);
                     }
                 } else {
                     logger.info("No successful job found for stage '{}' in pipeline {}",
@@ -816,13 +828,20 @@ public class FlowExecutionService {
             pipelineExecution.setStatus(ExecutionStatus.PASSED);
             pipelineExecution.setEndTime(LocalDateTime.now());
             
-            // Simulate output.env data
+            // Simulate output.env data and merge with configured data
             Map<String, String> mockOutputData = new HashMap<>();
             mockOutputData.put("MOCK_USER_ID", "user_" + System.currentTimeMillis());
             mockOutputData.put("MOCK_SESSION_TOKEN", "token_" + UUID.randomUUID().toString().substring(0, 8));
             mockOutputData.put("MOCK_TRANSACTION_ID", "txn_" + System.currentTimeMillis());
-            
-            pipelineExecution.setRuntimeTestData(mockOutputData);
+
+            // Merge configured test data with mock artifact data
+            Map<String, String> runtimeTestData = new HashMap<>();
+            if (pipelineExecution.getConfiguredTestData() != null) {
+                runtimeTestData.putAll(pipelineExecution.getConfiguredTestData());
+            }
+            runtimeTestData.putAll(mockOutputData); // Mock data can override configured data
+
+            pipelineExecution.setRuntimeTestData(runtimeTestData);
             pipelineExecutionRepository.save(pipelineExecution);
             
             logger.info("MOCK: Pipeline {} completed successfully with mock data: {}", 
@@ -912,26 +931,75 @@ public class FlowExecutionService {
 
     private FlowExecutionDto convertToDtoWithDetails(FlowExecution entity) {
         FlowExecutionDto dto = convertToDto(entity);
-        
+
         // Load flow details
         flowRepository.findById(entity.getFlowId()).ifPresent(flow -> {
             dto.setFlow(convertFlowToDto(flow));
-            
+
             // Load flow steps
             List<FlowStep> flowSteps = flowStepRepository.findByIdIn(flow.getFlowStepIds());
             dto.setFlowSteps(flowSteps.stream().map(this::convertFlowStepToDto).collect(Collectors.toList()));
-            
+
             // Load applications
             List<Long> applicationIds = flowSteps.stream().map(FlowStep::getApplicationId).distinct().collect(Collectors.toList());
             List<Application> applications = applicationRepository.findAllById(applicationIds);
             dto.setApplications(applications.stream().map(this::convertApplicationToDto).collect(Collectors.toList()));
+
+            // Load pipeline executions - show ALL configured FlowSteps with real-time status
+            List<PipelineExecutionDto> allPipelineExecutions = getAllPipelineExecutionsForFlowExecution(entity.getId(), flow, flowSteps);
+            dto.setPipelineExecutions(allPipelineExecutions);
         });
-        
-        // Load pipeline executions ONLY for this flow execution (exclude replays linked to others)
-        List<PipelineExecution> pipelineExecutions = pipelineExecutionRepository.findByFlowExecutionId(entity.getId());
-        dto.setPipelineExecutions(pipelineExecutions.stream().map(this::convertPipelineExecutionToDto).collect(Collectors.toList()));
-        
+
         return dto;
+    }
+
+    /**
+     * Get all pipeline executions for a flow execution, ensuring ALL configured FlowSteps are represented
+     * with appropriate status, even if not yet executed.
+     */
+    private List<PipelineExecutionDto> getAllPipelineExecutionsForFlowExecution(UUID flowExecutionId, Flow flow, List<FlowStep> flowSteps) {
+        // Get existing pipeline executions for this flow execution
+        List<PipelineExecution> existingPipelineExecutions = pipelineExecutionRepository.findByFlowExecutionId(flowExecutionId);
+
+        // Create a map of existing executions by flowStepId for quick lookup
+        Map<Long, PipelineExecution> existingByStepId = existingPipelineExecutions.stream()
+                .collect(Collectors.toMap(PipelineExecution::getFlowStepId, pe -> pe, (a, b) -> a));
+
+        // Build complete list of pipeline executions for all configured FlowSteps
+        List<PipelineExecutionDto> allPipelineExecutions = new ArrayList<>();
+
+        for (FlowStep flowStep : flowSteps) {
+            Long stepId = flowStep.getId();
+
+            if (existingByStepId.containsKey(stepId)) {
+                // Use existing pipeline execution data
+                PipelineExecution existing = existingByStepId.get(stepId);
+                allPipelineExecutions.add(convertPipelineExecutionToDto(existing));
+            } else {
+                // Create placeholder PipelineExecutionDto for FlowSteps not yet executed
+                PipelineExecutionDto placeholder = new PipelineExecutionDto();
+                placeholder.setId(null); // No database record yet
+                placeholder.setFlowId(flow.getId());
+                placeholder.setFlowExecutionId(flowExecutionId);
+                placeholder.setFlowStepId(stepId);
+                placeholder.setPipelineId(null);
+                placeholder.setPipelineUrl(null);
+                placeholder.setJobId(null);
+                placeholder.setJobUrl(null);
+                placeholder.setStartTime(null);
+                placeholder.setEndTime(null);
+                // Set configured test data (what will be used as input)
+                placeholder.setConfiguredTestData(testDataService.mergeTestDataByIds(flowStep.getTestDataIds()));
+                placeholder.setRuntimeTestData(null); // No runtime data yet
+                placeholder.setStatus(ExecutionStatus.SCHEDULED); // Waiting to be executed
+                placeholder.setCreatedAt(null);
+                placeholder.setIsReplay(false);
+                placeholder.setOriginalFlowExecutionId(null);
+                allPipelineExecutions.add(placeholder);
+            }
+        }
+
+        return allPipelineExecutions;
     }
 
     private FlowDto convertFlowToDto(Flow entity) {
