@@ -19,8 +19,10 @@ public interface PipelineExecutionRepository extends JpaRepository<PipelineExecu
     java.util.Optional<PipelineExecution> findTopByFlowExecutionIdAndFlowStepIdOrderByCreatedAtAsc(UUID flowExecutionId, Long flowStepId);
     
     List<PipelineExecution> findByFlowExecutionId(UUID flowExecutionId);
-    
+
     Page<PipelineExecution> findByFlowExecutionId(UUID flowExecutionId, Pageable pageable);
+
+    java.util.Optional<PipelineExecution> findByFlowExecutionIdAndFlowStepId(UUID flowExecutionId, Long flowStepId);
     
     List<PipelineExecution> findByFlowId(Long flowId);
     

@@ -245,9 +245,13 @@ public class FlowExecutionService {
 
         // Pre-create placeholder PipelineExecution records for immediate visibility
         List<Long> stepIds = flow.getFlowStepIds();
-        for (Long stepId : stepIds) {
+        List<PipelineExecution> pipelineExecutions = new ArrayList<>();
+
+        for (int i = 0; i < stepIds.size(); i++) {
+            Long stepId = stepIds.get(i);
             FlowStep step = flowStepRepository.findById(stepId)
                     .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
+
             PipelineExecution placeholder = new PipelineExecution();
             placeholder.setFlowId(flowId);
             placeholder.setFlowExecutionId(flowExecution.getId());
@@ -255,13 +259,147 @@ public class FlowExecutionService {
             // Pre-populate configured test data so clients can see inputs early
             placeholder.setConfiguredTestData(testDataService.mergeTestDataByIds(step.getTestDataIds()));
             placeholder.setRuntimeTestData(null);
-            placeholder.setStatus(ExecutionStatus.SCHEDULED);
-            placeholder.setStartTime(null);
-            pipelineExecutionTxService.saveNew(placeholder);
+
+            if (i == 0) {
+                // Trigger the first pipeline synchronously
+                logger.info("Triggering first pipeline synchronously for step: {}", stepId);
+                PipelineExecution firstPipeline = triggerPipelineSynchronously(flowExecution, step, placeholder);
+                pipelineExecutions.add(firstPipeline);
+            } else {
+                // Create placeholder for subsequent steps
+                placeholder.setStatus(ExecutionStatus.SCHEDULED);
+                placeholder.setStartTime(null);
+                pipelineExecutionTxService.saveNew(placeholder);
+                pipelineExecutions.add(placeholder);
+            }
         }
 
-        logger.info("Created flow execution with ID: {} and pre-created {} pipeline placeholders", flowExecution.getId(), stepIds.size());
+        logger.info("Created flow execution with ID: {} and triggered first pipeline synchronously", flowExecution.getId());
         return convertToDtoWithDetails(flowExecution);
+    }
+
+    /**
+     * Trigger the first pipeline synchronously to provide immediate feedback
+     */
+    private PipelineExecution triggerPipelineSynchronously(FlowExecution flowExecution, FlowStep step, PipelineExecution pipelineExecution) {
+        try {
+            Application application = applicationRepository.findById(step.getApplicationId())
+                    .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + step.getApplicationId()));
+
+            // Prepare variables for the first pipeline
+            Map<String, String> pipelineVariables = new HashMap<>();
+            Map<String, String> stepTestData = testDataService.mergeTestDataByIds(step.getTestDataIds());
+            pipelineVariables.putAll(stepTestData);
+
+            // Add the testTag from FlowStep to make it available in GitLab pipeline scope
+            if (step.getTestTag() != null && !step.getTestTag().trim().isEmpty()) {
+                pipelineVariables.put("testTag", step.getTestTag());
+                logger.debug("Added testTag '{}' to pipeline variables for first step {}", step.getTestTag(), step.getId());
+            }
+
+            // Save the pipeline execution record first
+            pipelineExecution.setStatus(ExecutionStatus.RUNNING);
+            pipelineExecution.setStartTime(LocalDateTime.now());
+            pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+
+            if (gitLabConfig.isMockMode()) {
+                // Mock mode for testing
+                logger.info("MOCK MODE: Simulating first GitLab pipeline execution for project {} on branch {}",
+                           application.getGitlabProjectId(), step.getBranch());
+
+                // Simulate pipeline response
+                long mockPipelineId = System.currentTimeMillis();
+                String mockPipelineUrl = String.format("https://gitlab.com/%s/-/pipelines/%d",
+                                                      application.getGitlabProjectId(), mockPipelineId);
+
+                pipelineExecution.setPipelineId(mockPipelineId);
+                pipelineExecution.setPipelineUrl(mockPipelineUrl);
+                pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+
+                logger.info("MOCK: First pipeline triggered successfully: {} for step {}", mockPipelineId, step.getId());
+
+            } else {
+                // Real GitLab API call
+                GitLabApiClient.GitLabPipelineResponse response = null;
+                try {
+                    response = gitLabApiClient
+                            .triggerPipeline(gitLabConfig.getBaseUrl(), application.getGitlabProjectId(),
+                                           step.getBranch(), applicationService.getDecryptedPersonalAccessToken(application.getId()), pipelineVariables)
+                            .doOnError(error -> {
+                                logger.error("GitLab API call failed for first pipeline project {} on branch {}: {}",
+                                           application.getGitlabProjectId(), step.getBranch(), error.getMessage());
+                                if (error.getMessage().contains("400")) {
+                                    logger.error("This is likely due to invalid GitLab project ID, branch name, or access token");
+                                }
+                            })
+                            .block();
+                } catch (Exception apiError) {
+                    logger.error("GitLab API call failed for first pipeline: {}", apiError.getMessage());
+                    response = null;
+                }
+
+                if (response != null) {
+                    pipelineExecution.setPipelineId(response.getId());
+                    pipelineExecution.setPipelineUrl(response.getWebUrl());
+                    pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+
+                    logger.info("First pipeline triggered successfully: {} for step {}", response.getId(), step.getId());
+
+                    // Start polling for completion asynchronously
+                    pollPipelineCompletionAsync(pipelineExecution, application, gitLabConfig.getBaseUrl(), step);
+
+                } else {
+                    logger.error("Failed to trigger first pipeline - null response from GitLab API");
+                    pipelineExecution.setStatus(ExecutionStatus.FAILED);
+                    pipelineExecution.setEndTime(LocalDateTime.now());
+                    pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+                }
+            }
+
+        } catch (Exception e) {
+            logger.error("Failed to trigger first pipeline synchronously: {}", e.getMessage(), e);
+            pipelineExecution.setStatus(ExecutionStatus.FAILED);
+            pipelineExecution.setEndTime(LocalDateTime.now());
+            pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+        }
+
+        return pipelineExecution;
+    }
+
+    @Async("pipelinePollingTaskExecutor")
+    public void pollPipelineCompletionAsync(PipelineExecution pipelineExecution, Application application, String gitlabBaseUrl, FlowStep step) {
+        logger.info("Starting async polling for first pipeline completion: {}", pipelineExecution.getPipelineId());
+
+        try {
+            while (true) {
+                GitLabApiClient.GitLabPipelineResponse status = gitLabApiClient
+                        .getPipelineStatus(gitlabBaseUrl, application.getGitlabProjectId(),
+                                         pipelineExecution.getPipelineId(), applicationService.getDecryptedPersonalAccessToken(application.getId()))
+                        .block();
+
+                if (status != null && status.isCompleted()) {
+                    pipelineExecution.setStatus(status.isSuccessful() ? ExecutionStatus.PASSED : ExecutionStatus.FAILED);
+                    pipelineExecution.setEndTime(LocalDateTime.now());
+
+                    // Download artifacts if successful
+                    if (status.isSuccessful()) {
+                        downloadAndParseArtifacts(pipelineExecution, application, gitlabBaseUrl, step);
+                    }
+
+                    pipelineExecutionRepository.save(pipelineExecution);
+                    logger.info("First pipeline {} completed with status: {}", pipelineExecution.getPipelineId(), pipelineExecution.getStatus());
+                    break;
+                }
+
+                // Wait before next poll
+                Thread.sleep(30000); // 30 seconds
+            }
+        } catch (Exception e) {
+            logger.error("Error polling first pipeline completion: {}", e.getMessage(), e);
+            pipelineExecution.setStatus(ExecutionStatus.FAILED);
+            pipelineExecution.setEndTime(LocalDateTime.now());
+            pipelineExecutionRepository.save(pipelineExecution);
+        }
     }
 
     @Async("flowExecutionTaskExecutor")
@@ -572,17 +710,17 @@ public class FlowExecutionService {
             logger.debug("Added testTag '{}' to replay pipeline variables for step {}", step.getTestTag(), step.getId());
         }
 
-        // Create pipeline execution record with replay flag
-        PipelineExecution pipelineExecution = new PipelineExecution(
-                flowExecution.getFlowId(),
-                flowExecution.getId(),
-                step.getId(),
-                testDataService.mergeTestDataByIds(step.getTestDataIds()),
-                pipelineVariables
-        );
+        // Find existing pipeline execution record created in createReplayFlowExecution
+        PipelineExecution pipelineExecution = pipelineExecutionRepository
+                .findByFlowExecutionIdAndFlowStepId(flowExecution.getId(), step.getId())
+                .orElseThrow(() -> new IllegalStateException("Replay pipeline execution record not found for step: " + step.getId()));
+
+        // Update the existing record instead of creating new one
+        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
+        pipelineExecution.setStartTime(LocalDateTime.now());
         pipelineExecution.setIsReplay(true);
         pipelineExecution.setOriginalFlowExecutionId(originalFlowExecutionId);
-        pipelineExecution = pipelineExecutionTxService.saveUpdate(pipelineExecution);
+        pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
 
         try {
             logger.debug("Triggering REPLAY pipeline with variables: {}", mergedVariables);
@@ -667,15 +805,14 @@ public class FlowExecutionService {
             logger.debug("Added testTag '{}' to pipeline variables for step {}", step.getTestTag(), step.getId());
         }
 
-        // Create pipeline execution record
-        Map<String, String> configuredTestData = testDataService.mergeTestDataByIds(step.getTestDataIds());
-        PipelineExecution pipelineExecution = new PipelineExecution(
-                flowExecution.getFlowId(),
-                flowExecution.getId(),
-                step.getId(),
-                configuredTestData,
-                null // runtimeTestData starts as null, will be populated with artifacts
-        );
+        // Find existing pipeline execution record created in createFlowExecution
+        PipelineExecution pipelineExecution = pipelineExecutionRepository
+                .findByFlowExecutionIdAndFlowStepId(flowExecution.getId(), step.getId())
+                .orElseThrow(() -> new IllegalStateException("Pipeline execution record not found for step: " + step.getId()));
+
+        // Update the existing record instead of creating new one
+        pipelineExecution.setStatus(ExecutionStatus.RUNNING);
+        pipelineExecution.setStartTime(LocalDateTime.now());
         pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
 
         try {
@@ -958,22 +1095,23 @@ public class FlowExecutionService {
      * with appropriate status, even if not yet executed.
      */
     private List<PipelineExecutionDto> getAllPipelineExecutionsForFlowExecution(UUID flowExecutionId, Flow flow, List<FlowStep> flowSteps) {
-        // Get existing pipeline executions for this flow execution
-        List<PipelineExecution> existingPipelineExecutions = pipelineExecutionRepository.findByFlowExecutionId(flowExecutionId);
+        // Get existing pipeline executions for this flow execution - ensure fresh data
+        List<PipelineExecution> existingPipelineExecutions = pipelineExecutionRepository.findByFlowExecutionIdOrderByCreatedAt(flowExecutionId);
 
         // Create a map of existing executions by flowStepId for quick lookup
         Map<Long, PipelineExecution> existingByStepId = existingPipelineExecutions.stream()
                 .collect(Collectors.toMap(PipelineExecution::getFlowStepId, pe -> pe, (a, b) -> a));
 
-        // Build complete list of pipeline executions for all configured FlowSteps
+        // Build complete list of pipeline executions for all configured FlowSteps in order
         List<PipelineExecutionDto> allPipelineExecutions = new ArrayList<>();
 
         for (FlowStep flowStep : flowSteps) {
             Long stepId = flowStep.getId();
 
             if (existingByStepId.containsKey(stepId)) {
-                // Use existing pipeline execution data
+                // Use existing pipeline execution data - this will have updated status
                 PipelineExecution existing = existingByStepId.get(stepId);
+                logger.debug("Found existing pipeline execution for step {} with status: {}", stepId, existing.getStatus());
                 allPipelineExecutions.add(convertPipelineExecutionToDto(existing));
             } else {
                 // Create placeholder PipelineExecutionDto for FlowSteps not yet executed
@@ -999,6 +1137,7 @@ public class FlowExecutionService {
             }
         }
 
+        logger.debug("Returning {} pipeline executions for flow execution {}", allPipelineExecutions.size(), flowExecutionId);
         return allPipelineExecutions;
     }
 
@@ -1073,8 +1212,7 @@ public class FlowExecutionService {
         dto.setFlowStepId(entity.getFlowStepId());
         dto.setPipelineId(entity.getPipelineId());
         dto.setPipelineUrl(entity.getPipelineUrl());
-        dto.setJobId(entity.getJobId());
-        dto.setJobUrl(entity.getJobUrl());
+        // Removed jobId and jobUrl as requested - they create ambiguity for multi-job pipelines
         dto.setStartTime(entity.getStartTime());
         dto.setEndTime(entity.getEndTime());
         dto.setConfiguredTestData(entity.getConfiguredTestData());
