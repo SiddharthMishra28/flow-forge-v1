@@ -51,7 +51,7 @@ scheduling:
     cron: ${TOKEN_VALIDATION_CRON:0 0 2 * * *}
   pipeline-status:
     # Pipeline status polling interval in milliseconds (default: 60 seconds)
-    polling-interval: ${PIPELINE_STATUS_POLLING_INTERVAL:60000}
+    polling-interval: ${PIPELINE_STATUS_POLLING_INTERVAL:5000}
 
 ---
 spring:
