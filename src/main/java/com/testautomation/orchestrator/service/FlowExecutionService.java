@@ -64,7 +64,7 @@ public class FlowExecutionService {
     @Autowired
     private com.testautomation.orchestrator.config.GitLabConfig gitLabConfig;
 
-    @org.springframework.beans.factory.annotation.Value("${scheduling.pipeline-status.polling-interval:60000}")
+    @org.springframework.beans.factory.annotation.Value("${scheduling.pipeline-status.polling-interval:15000}")
     private long pipelinePollingIntervalMs;
 
     @Autowired(required = false)
