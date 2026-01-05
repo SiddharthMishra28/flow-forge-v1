@@ -430,7 +430,45 @@ public class FlowExecutionService {
                         .orElseThrow(() -> new IllegalArgumentException("Flow step not found with ID: " + stepId));
 
                 Application application = applicationRepository.findById(step.getApplicationId())
-                        .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + step.getApplicationId()));
+                        .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + stepId));
+
+                // Check if this pipeline step is already running or completed (from createFlowExecution trigger)
+                PipelineExecution existingPipelineExecution = pipelineExecutionRepository
+                        .findByFlowExecutionIdAndFlowStepId(flowExecution.getId(), stepId)
+                        .orElse(null);
+
+                if (existingPipelineExecution != null &&
+                    (existingPipelineExecution.getStatus() == ExecutionStatus.RUNNING ||
+                     existingPipelineExecution.getStatus() == ExecutionStatus.PASSED ||
+                     existingPipelineExecution.getStatus() == ExecutionStatus.FAILED)) {
+                    // Pipeline already triggered, just wait for completion and accumulate variables
+                    logger.debug("Pipeline for step {} already triggered with status: {}, waiting for completion",
+                               stepId, existingPipelineExecution.getStatus());
+
+                    // Wait for completion if still running
+                    if (existingPipelineExecution.getStatus() == ExecutionStatus.RUNNING) {
+                        existingPipelineExecution = waitForPipelineCompletion(existingPipelineExecution, application, step);
+                    }
+
+                    if (existingPipelineExecution.getStatus() == ExecutionStatus.FAILED) {
+                        // Mark flow as failed and stop execution
+                        flowExecution.setStatus(ExecutionStatus.FAILED);
+                        flowExecution.setEndTime(LocalDateTime.now());
+                        flowExecution.setRuntimeVariables(accumulatedRuntimeVariables);
+                        flowExecutionRepository.save(flowExecution);
+
+                        logger.error("Flow execution failed at step: {}", stepId);
+                        return CompletableFuture.completedFuture(convertToDto(flowExecution));
+                    }
+
+                    // Accumulate runtime variables from this step for next steps
+                    if (existingPipelineExecution.getRuntimeTestData() != null) {
+                        accumulatedRuntimeVariables.putAll(existingPipelineExecution.getRuntimeTestData());
+                        logger.debug("Accumulated runtime variables after step {}: {}", stepId, accumulatedRuntimeVariables);
+                    }
+
+                    continue; // Skip to next step
+                }
 
                 // Prepare variables for this pipeline: FlowStep TestData + Accumulated Runtime
                 Map<String, String> pipelineVariables = new HashMap<>();
@@ -996,31 +1034,71 @@ public class FlowExecutionService {
         }
     }
 
+    /**
+     * Wait for a pipeline that is already running to complete
+     */
+    private PipelineExecution waitForPipelineCompletion(PipelineExecution pipelineExecution, Application application, FlowStep step) {
+        logger.info("Waiting for already running pipeline {} to complete", pipelineExecution.getPipelineId());
+
+        try {
+            while (true) {
+                GitLabApiClient.GitLabPipelineResponse status = gitLabApiClient
+                        .getPipelineStatus(gitLabConfig.getBaseUrl(), application.getGitlabProjectId(),
+                                         pipelineExecution.getPipelineId(), applicationService.getDecryptedPersonalAccessToken(application.getId()))
+                        .block();
+
+                if (status != null && status.isCompleted()) {
+                    pipelineExecution.setStatus(status.isSuccessful() ? ExecutionStatus.PASSED : ExecutionStatus.FAILED);
+                    pipelineExecution.setEndTime(LocalDateTime.now());
+
+                    // Download artifacts if successful
+                    if (status.isSuccessful()) {
+                        downloadAndParseArtifacts(pipelineExecution, application, gitLabConfig.getBaseUrl(), step);
+                    }
+
+                    pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+                    logger.info("Pipeline {} completed with status: {}", pipelineExecution.getPipelineId(), pipelineExecution.getStatus());
+                    break;
+                }
+
+                // Wait before next poll - configurable via application.yml
+                Thread.sleep(pipelinePollingIntervalMs);
+            }
+        } catch (Exception e) {
+            logger.error("Error waiting for pipeline completion: {}", e.getMessage(), e);
+            pipelineExecution.setStatus(ExecutionStatus.FAILED);
+            pipelineExecution.setEndTime(LocalDateTime.now());
+            pipelineExecution = pipelineExecutionRepository.save(pipelineExecution);
+        }
+
+        return pipelineExecution;
+    }
+
     @Async("pipelinePollingTaskExecutor")
     public void pollPipelineCompletion(PipelineExecution pipelineExecution, Application application, String gitlabBaseUrl, FlowStep step) {
         logger.info("Starting to poll pipeline completion for pipeline: {}", pipelineExecution.getPipelineId());
-        
+
         try {
             while (true) {
                 GitLabApiClient.GitLabPipelineResponse status = gitLabApiClient
                         .getPipelineStatus(gitlabBaseUrl, application.getGitlabProjectId(),
                                          pipelineExecution.getPipelineId(), applicationService.getDecryptedPersonalAccessToken(application.getId()))
                         .block();
-                
+
                 if (status != null && status.isCompleted()) {
                     pipelineExecution.setStatus(status.isSuccessful() ? ExecutionStatus.PASSED : ExecutionStatus.FAILED);
                     pipelineExecution.setEndTime(LocalDateTime.now());
-                    
+
                     // Download artifacts if successful
                     if (status.isSuccessful()) {
                         downloadAndParseArtifacts(pipelineExecution, application, gitlabBaseUrl, step);
                     }
-                    
+
                     pipelineExecutionRepository.save(pipelineExecution);
                     logger.info("Pipeline {} completed with status: {}", pipelineExecution.getPipelineId(), pipelineExecution.getStatus());
                     break;
                 }
-                
+
                 // Wait before next poll - configurable via application.yml
                 Thread.sleep(pipelinePollingIntervalMs);
             }
