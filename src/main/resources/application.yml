@@ -42,6 +42,14 @@ gitlab:
   timeout: 60
   max-retries: 3
 
+# Flow Execution Configuration
+flow-execution:
+  # Pipeline status polling interval during flow execution in milliseconds
+  # This controls how frequently the system checks if running pipelines have completed
+  # Lower values = more responsive status updates but higher API load
+  # Default: 15000ms (15 seconds)
+  polling-interval: ${FLOW_EXECUTION_POLLING_INTERVAL:15000}
+
 # Scheduling Configuration
 scheduling:
   token-validation:
@@ -50,8 +58,8 @@ scheduling:
     # 0 0 2 * * * = Every day at 2:00 AM
     cron: ${TOKEN_VALIDATION_CRON:0 0 2 * * *}
   pipeline-status:
-    # Pipeline status polling interval in milliseconds (default: 15 seconds - more responsive)
-    polling-interval: ${PIPELINE_STATUS_POLLING_INTERVAL:15000}
+    # Scheduled pipeline status polling interval in milliseconds (default: 60 seconds)
+    polling-interval: ${PIPELINE_STATUS_POLLING_INTERVAL:60000}
 
 ---
 spring:

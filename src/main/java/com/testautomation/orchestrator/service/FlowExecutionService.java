@@ -64,8 +64,11 @@ public class FlowExecutionService {
     @Autowired
     private com.testautomation.orchestrator.config.GitLabConfig gitLabConfig;
 
-    @org.springframework.beans.factory.annotation.Value("${scheduling.pipeline-status.polling-interval:15000}")
-    private long pipelinePollingIntervalMs;
+    @org.springframework.beans.factory.annotation.Value("${scheduling.pipeline-status.polling-interval:60000}")
+    private long scheduledPollingIntervalMs;
+
+    @org.springframework.beans.factory.annotation.Value("${flow-execution.polling-interval:15000}")
+    private long flowExecutionPollingIntervalMs;
 
     @Autowired(required = false)
     @Qualifier("flowExecutionTaskExecutor")
@@ -395,7 +398,7 @@ public class FlowExecutionService {
                 }
 
                 // Wait before next poll - configurable via application.yml
-                Thread.sleep(pipelinePollingIntervalMs);
+                Thread.sleep(flowExecutionPollingIntervalMs);
             }
         } catch (Exception e) {
             logger.error("Error polling first pipeline completion: {}", e.getMessage(), e);
@@ -1062,7 +1065,7 @@ public class FlowExecutionService {
                 }
 
                 // Wait before next poll - configurable via application.yml
-                Thread.sleep(pipelinePollingIntervalMs);
+                Thread.sleep(flowExecutionPollingIntervalMs);
             }
         } catch (Exception e) {
             logger.error("Error waiting for pipeline completion: {}", e.getMessage(), e);
@@ -1100,7 +1103,7 @@ public class FlowExecutionService {
                 }
 
                 // Wait before next poll - configurable via application.yml
-                Thread.sleep(pipelinePollingIntervalMs);
+                Thread.sleep(flowExecutionPollingIntervalMs);
             }
         } catch (Exception e) {
             logger.error("Error polling pipeline completion: {}", e.getMessage(), e);
